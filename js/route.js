@@ -53,13 +53,12 @@ function extractSegments(routeObj){
     const residentialSegments = new Set();
 
      // 🔥 CORRECTIF : Dans le format standard, les extras sont stockés dans le premier segment
-    if(!routeObj || !routeObj.segments || !routeObj.segments || !routeObj.segments.extras) {
-        alert("Pas d'extras disponibles sur cette route cyclable");
-        return {forestSegments, residentialSegments};
-    }
+    if (!routeObj || !routeObj.segments || !routeObj.segments[0] || !routeObj.segments[0].extras) {
+    alert("Pas d'extras disponibles");
+    return {forestSegments, residentialSegments};
+}
 
-    // On cible le dossier extras du premier segment de l'itinéraire
-    const extras = routeObj.segments.extras;
+const extras = routeObj.segments[0].extras;
  
      if(extras.waytype && extras.waytype.values){
         extras.waytype.values.forEach(v => {
@@ -110,7 +109,7 @@ if (debugDiv) {
 }
 function calculateWindScore(latlngs, routeObj){
 
-    const {forestSegments, residentialSegments} = extractSegments(feature);
+    const {forestSegments, residentialSegments} = extractSegments(routesObj);
 
     let totalCost = 0;
     let count = 0;
@@ -211,7 +210,7 @@ function drawGrayRoute(latlngs){
     const latlngsCorriges = latlngs.map(point => [point[1], point[0]]);
     
     const line = L.polyline(
-        latlngs,
+        latlngsCorriges,
         {
             color: "gray",
             weight: 3,       // 🔥 CORRECTION : Alternative encore plus discrète (au lieu de 5)
@@ -263,7 +262,7 @@ async function getRoute(){
     let alternativeRouteObj = normalRouteObj;
 
     if (allRoutesData.routes.length > 1) {
-        alternativeRouteObj = allRoutesData.routes[0];
+        alternativeRouteObj = allRoutesData.routes[1];
         const coordsAlt = alternativeRouteObj.geometry.coordinates;
         // ✅ CORRECTIF 1 (bis) : Inversion également sur la route alternative
         latlngsAlternative = coordsAlt.map(point => [point[1], point[0]]);
@@ -285,7 +284,7 @@ async function getRoute(){
     const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
     const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
 
-    c// ✅ CORRECTIF 2 : Nettoyage des variables fantômes, accès direct via summary.duration
+    // ✅ CORRECTIF 2 : Nettoyage des variables fantômes, accès direct via summary.duration
     const routesArrayMock = { duration: normalRouteObj.summary.duration };
     const alternativeMock = { duration: alternativeRouteObj.summary.duration };
 
