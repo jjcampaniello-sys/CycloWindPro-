@@ -253,7 +253,7 @@ async function getRoute(){
         return;
     }
 
-    const normalRouteObj = allRoutesData.routes;
+    const normalRouteObj = allRoutesData.routes[0];
     // Dans le format standard, les coordonnées sont déjà rangées dans l'ordre [Latitude, Longitude]
     const coordsNormal = normalRouteObj.geometry.coordinates;
     // ✅ CORRECTIF 1 : Inversion indispensable [1] = Latitude, [0] = Longitude pour Leaflet
@@ -263,7 +263,7 @@ async function getRoute(){
     let alternativeRouteObj = normalRouteObj;
 
     if (allRoutesData.routes.length > 1) {
-        alternativeRouteObj = allRoutesData.routes;
+        alternativeRouteObj = allRoutesData.routes[0];
         const coordsAlt = alternativeRouteObj.geometry.coordinates;
         // ✅ CORRECTIF 1 (bis) : Inversion également sur la route alternative
         latlngsAlternative = coordsAlt.map(point => [point[1], point[0]]);
