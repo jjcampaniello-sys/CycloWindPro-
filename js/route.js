@@ -27,8 +27,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-    extra_info: ["waytype", "surface"]
-       alert(JSON.stringify(data.features[0].properties)); 
+    extra_info: ["waytype", "surface"]   
 };
 
     const response = await fetch(url, {
@@ -41,6 +40,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
     });
 
     const data = await response.json();
+     alert(JSON.stringify(data.features[0].properties));
     return data; 
 }
 function extractSegments(feature){
