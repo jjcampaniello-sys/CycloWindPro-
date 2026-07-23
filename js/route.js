@@ -49,7 +49,7 @@ function extractSegments(feature){
     const residentialSegments = new Set();
 alert("avant extra_info");
     if(!feature.properties || !feature.properties.extra_info){
-         alert("extra_info trouvé");
+        alert("pas dinfo sur cette route");
         return {forestSegments, residentialSegments};
     }
 
@@ -63,14 +63,14 @@ alert("avant extra_info");
             const type = v[2];
 
             // 🌳 chemins nature / forêt
-          if(type === 1 || type === 2){
+          if(type === 3 || type === 10){
                 for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
             }
 
             // 🏠 zones résidentielles
-            if(type === 20 || type === 21){
+            if(type === 1 || type === 2){
                 for(let i = from; i <= to; i++){
                     residentialSegments.add(i);
                 }
@@ -85,7 +85,7 @@ alert("avant extra_info");
             const surfaceType = v[2];
             // Codes >= 5 = Terre, gravier, herbe (Zones vertes arborées naturelles)
             if(surfaceType >= 5){
-                for(let i = from; i < to; i++){
+                for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
             }
