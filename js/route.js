@@ -52,6 +52,16 @@ function extractSegments(feature){
 
     const extras = feature.properties.extra_info;
 
+// ✅ DEBUG ICI
+const debugDiv = document.getElementById("debug");
+
+if (debugDiv) {
+    debugDiv.innerHTML = `
+        🌲 Segments forêt: ${forestSegments.size}<br>
+        🏠 Segments résidentiel: ${residentialSegments.size}
+    `;
+}
+    
     if(extras.waytype){
         extras.waytype.values.forEach(v => {
 
@@ -98,11 +108,11 @@ function calculateWindScore(latlngs, feature){
         );
 
         // 🌳 BONUS ABRI
-        if (forestSegments.has(i)) {
-    cost *= 0.5;
-} 
+       if (forestSegments.has(i)) {
+    cost = cost * 0.5;
+}
 else if (residentialSegments.has(i)) {
-    cost *= 0.7;
+    cost = cost * 0.7;
 }
         totalCost += cost;
         count++;
