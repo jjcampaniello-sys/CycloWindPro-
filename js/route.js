@@ -48,14 +48,14 @@ function extractSegments(feature){
     const forestSegments = new Set();
     const residentialSegments = new Set();
 alert("avant extra_info");
-    if(!feature.properties.extra_info) {
+    if(!feature.properties || !feature.properties.extra_info){
          alert("extra_info trouvé");
         return {forestSegments, residentialSegments};
     }
 
     const extras = feature.properties.extra_info;
  
-    if(extras.waytype){
+     if(extras.waytype && extras.waytype.values){
         extras.waytype.values.forEach(v => {
 
             const from = v[0];
@@ -63,7 +63,7 @@ alert("avant extra_info");
             const type = v[2];
 
             // 🌳 chemins nature / forêt
-            if(type === 40 || type === 41){
+          if(type === 1 || type === 2){
                 for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
@@ -73,6 +73,20 @@ alert("avant extra_info");
             if(type === 20 || type === 21){
                 for(let i = from; i <= to; i++){
                     residentialSegments.add(i);
+                }
+            }
+        });
+    }
+    // Analyse secondaire via les revêtements (surface) pour renforcer la détection des bois
+    if(extras.surface && extras.surface.values){
+        extras.surface.values.forEach(v => {
+            const from = v[0];
+            const to = v[1];
+            const surfaceType = v[2];
+            // Codes >= 5 = Terre, gravier, herbe (Zones vertes arborées naturelles)
+            if(surfaceType >= 5){
+                for(let i = from; i < to; i++){
+                    forestSegments.add(i);
                 }
             }
         });
@@ -265,8 +279,8 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
     const windGain = calculateWindGain(normalScore, alternativeScore);
 
     let recommendation = choice === "alternative" && allRoutesData.features.length > 1
-        ? "🌱 CycloWind recommande l'alternative"
-        : "🚴 CycloWind recommande ce trajet";
+        ? "🌱 CycloWind recommande l'alternative (Mieux abritée)"
+        : "🚴 CycloWind recommande ce trajet (Plus abrité ou rapide)" ;
 
     // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
            function updateWindText(currentView, activeScore) {
