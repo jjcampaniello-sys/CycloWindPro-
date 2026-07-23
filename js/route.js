@@ -28,6 +28,8 @@ async function getAlternativeRoute(start, endLat, endLon) {
             weight_factor: 1.8  
         },
     extra_info: ["waytype", "surface"]   
+        // ✅ nécessaire pour tracer
+    geometry_format: "geojson"
 };
 
     const response = await fetch(url, {
