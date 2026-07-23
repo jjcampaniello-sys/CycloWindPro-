@@ -255,6 +255,7 @@ async function getRoute(){
     }
 
     const normalRouteObj = allRoutesData.routes[0];
+    document.getElementById("debug").innerHTML += "<br>Route reçue ✔️";
     // Dans le format standard, les coordonnées sont déjà rangées dans l'ordre [Latitude, Longitude]
     const coordsNormal = normalRouteObj.geometry.coordinates;
     // ✅ CORRECTIF 1 : Inversion indispensable [1] = Latitude, [0] = Longitude pour Leaflet
