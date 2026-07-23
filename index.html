@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CycloWind</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="stylesheet" 
+    href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+</head>
+
+<body>
+
+<h1>CycloWind</h1>
+<div class="top-bar">
+
+   <!-- Avant : <button onclick="getLocation()">Ma position</button> -->
+<!-- Remplacer par : -->
+<button id="startNavBtn" onclick="startNavigation()" style="background-color: #2ecc71; color: white; padding: 10px; border: none; border-radius: 6px; cursor: pointer;">
+    Démarrer
+</button>
+
+
+  <button onclick="getRoute()">
+        Calculer trajet
+    </button>
+    <button onclick="clearRoute()">Supprimer trajet</button>
+
+</div>
+  
+
+<div class="search-box">
+     
+    <input id="destination" oninput="searchDestination()" placeholder="Entrer une destination">
+
+<div id="suggestions" style="
+background:white;
+position:absolute;
+z-index:1000;
+width:90%;
+max-height:200px;
+overflow:auto;
+border:1px solid #ccc;">
+</div>
+    <div id="suggestions"></div>
+
+</div>
+
+<div id="map"></div>
+<!-- Bloc d'analyse du vent en bas à droite de la carte -->
+<!-- 1. BLOC DE GAUCHE : Contient UNIQUEMENT le bouton Toggle -->
+<div class="wind-container-left">
+    <button id="toggleRouteBtn">Voir la route alternative</button>
+</div>
+
+<!-- 2. BLOC DE DROITE : Contient le texte des scores et de la recommandation -->
+
+    <div id="windInfo"> </div>
+
+
+<!-- Leaflet library first -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Utility functions -->
+<script src="js/wind.js"></script>
+<script src="js/bike.js"></script>
+    
+    <!-- App initialization (creates map) - MUST come before GPS -->
+<script src="js/app.js"></script>
+
+    <!-- GPS and location services - uses map from app.js -->
+    <script> 
+    
+    </script>
+<script src="js/gps.js?v=999"></script>
+<script> 
+  
+    </script>
+    
+<!-- Search functionality -->
+<script src="js/search.js"></script>
+
+<!-- Routing -->
+<script src="js/route.js"></script>
+
+</body>
+</html>
