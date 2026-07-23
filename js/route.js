@@ -318,6 +318,8 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
             // On utilise Math.abs() pour transformer le chiffre négatif (ex: -15) en positif (ex: 15)
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
             dynamiqueRecommendation = currentView === "alternative" 
+            ? "⚠️ Route alternative plus exposée"
+                : "🚴 Trajet initial bien plus abrité";
         }
 
         document.getElementById("windInfo").innerHTML = `
