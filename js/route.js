@@ -1,3 +1,4 @@
+alert("getRoute lancé");
 // Direction segment route
 function getSegmentDirection(p1, p2){
     const dy = p2[0] - p1[0];
@@ -28,7 +29,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
         },
     extra_info: ["waytype", "surface"]
 };
-
+alert(JSON.stringify(data.features[0].properties));
     const response = await fetch(url, {
         method: "POST",
         headers: {
