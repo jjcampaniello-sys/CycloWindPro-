@@ -1,4 +1,4 @@
-alert("Route lancé");
+alert("getRoute lancé");
 // Direction segment route
 function getSegmentDirection(p1, p2){
     const dy = p2[0] - p1[0];
@@ -15,7 +15,7 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular";
+    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
   
     const body = {
         coordinates: [
@@ -27,9 +27,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-   extra_info: ["roadattributes", "surface", "waytype"] 
-        // ✅ nécessaire pour tracer
-    geometry_format: "geojson"
+    extra_info: ["waytype", "surface"]   
 };
 
     const response = await fetch(url, {
@@ -42,27 +40,22 @@ async function getAlternativeRoute(start, endLat, endLon) {
     });
 
     const data = await response.json();
-     // ✅ CORRIGÉ POUR LE FORMAT STANDARD : On affiche le résumé de la première route calculée
-    if (data && data.routes && data.routes[0]) {
-        alert("API Réponse Ok ! Résumé route : " + JSON.stringify(data.routes[0].summary));
-    } else {
-        alert("Erreur : L'API n'a pas renvoyé de tableau 'routes'. " + JSON.stringify(data));
-    }
+     alert(JSON.stringify(data.features[0].properties));
     return data; 
 }
-function extractSegments(routeObj){
+function extractSegments(feature){
+
     const forestSegments = new Set();
     const residentialSegments = new Set();
+alert("avant extra_info");
+    if(!feature.properties.extra_info) {
+         alert("extra_info trouvé");
+        return {forestSegments, residentialSegments};
+    }
 
-     // 🔥 CORRECTIF : Dans le format standard, les extras sont stockés dans le premier segment
-    if (!routeObj || !routeObj.segments || !routeObj.segments[0] || !routeObj.segments[0].extras) {
-    alert("Pas d'extras disponibles");
-    return {forestSegments, residentialSegments};
-}
-
-const extras = routeObj.segments[0].extras;
+    const extras = feature.properties.extra_info;
  
-     if(extras.waytype && extras.waytype.values){
+    if(extras.waytype){
         extras.waytype.values.forEach(v => {
 
             const from = v[0];
@@ -70,40 +63,34 @@ const extras = routeObj.segments[0].extras;
             const type = v[2];
 
             // 🌳 chemins nature / forêt
-          if(type === 3 || type === 10){
+            if(type === 40 || type === 41){
                 for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
             }
 
             // 🏠 zones résidentielles
-            if(type === 1 || type === 2){
+            if(type === 20 || type === 21){
                 for(let i = from; i <= to; i++){
                     residentialSegments.add(i);
                 }
             }
         });
     }
-    // Analyse secondaire via les revêtements (surface) pour renforcer la détection des bois
-    if(extras.surface && extras.surface.values){
-        extras.surface.values.forEach(v => {
-            const from = v[0];
-            const to = v[1];
-            const surfaceType = v[2];
-            // Codes >= 5 = Terre, gravier, herbe (Zones vertes arborées naturelles)
-            if(surfaceType >= 5){
-                for(let i = from; i <= to; i++){
-                    forestSegments.add(i);
-                }
-            }
-        });
-    }
+// ✅ DEBUG ICI
+const debugDiv = document.getElementById("debug");
 
+if (debugDiv) {
+    debugDiv.innerHTML = `
+        🌲 Segments forêt: ${forestSegments.size}<br>
+        🏠 Segments résidentiel: ${residentialSegments.size}
+    `;
+}
     return {forestSegments, residentialSegments};
 }
-function calculateWindScore(latlngs, routeObj){
+function calculateWindScore(latlngs, feature){
 
-    const {forestSegments, residentialSegments} = extractSegments(routesObj);
+    const {forestSegments, residentialSegments} = extractSegments(feature);
 
     let totalCost = 0;
     let count = 0;
@@ -136,8 +123,8 @@ else if (residentialSegments.has(i)) {
 }
 
 function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
-    const normalTime = normalRoute.summary.duration;
-    const alternativeTime = alternativeRoute.summary.duration;
+    const normalTime = normalRoute.duration;
+    const alternativeTime = alternativeRoute.duration;
 
     const windGain = normalScore - alternativeScore;
 
@@ -179,13 +166,9 @@ function drawWindRoute(latlngs){
         else{
             color = "green";
         }
-// 🔥 CORRECTIF : On extrait proprement la Latitude [0] et la Longitude [1] 
-        // de chaque point pour créer un format [Lat, Lng] que Leaflet comprend à 100%
-        const pointA = [latlngs[i][0], latlngs[i][1]];
-        const pointB = [latlngs[i+1][0], latlngs[i+1][1]];
-        
-         const line = L.polyline(
-            [pointA, pointB], // On passe les points corrigés [Lat, Lng]
+
+        const line = L.polyline(
+            [latlngs[i], latlngs[i+1]],
             {
                 color: color,
                 weight: 4,       // 🔥 CORRECTION : Ligne plus fine (au lieu de 6)
@@ -199,12 +182,8 @@ function drawWindRoute(latlngs){
 }
 
 function drawGrayRoute(latlngs){
-    // 🔥 CORRECTIF : On inverse chaque coordonnée pour passer du format API [Lon, Lat] 
-    // au format attendu par Leaflet [Lat, Lon]
-    const latlngsCorriges = latlngs.map(point => [point[1], point[0]]);
-    
     const line = L.polyline(
-        latlngsCorriges,
+        latlngs,
         {
             color: "gray",
             weight: 3,       // 🔥 CORRECTION : Alternative encore plus discrète (au lieu de 5)
@@ -240,26 +219,21 @@ async function getRoute(){
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
     
-  // AllRoutesData contient désormais un tableau nommé "routes"
-    if (!allRoutesData || !allRoutesData.routes || allRoutesData.routes.length === 0) {
+    if (!allRoutesData.features || allRoutesData.features.length === 0) {
         alert("Aucun itinéraire trouvé");
         return;
     }
 
-    const normalRouteObj = allRoutesData.routes[0];
-   
-    // Dans le format standard, les coordonnées sont déjà rangées dans l'ordre [Latitude, Longitude]
-    const coordsNormal = normalRouteObj.geometry.coordinates;
-    // ✅ CORRECTIF 1 : Inversion indispensable [1] = Latitude, [0] = Longitude pour Leaflet
+    const normalFeature = allRoutesData.features[0];
+    const coordsNormal = normalFeature.geometry.coordinates;
     const latlngsNormal = coordsNormal.map(point => [point[1], point[0]]);
 
     let latlngsAlternative = latlngsNormal; 
-    let alternativeRouteObj = normalRouteObj;
+    let alternativeFeature = normalFeature;
 
-    if (allRoutesData.routes.length > 1) {
-        alternativeRouteObj = allRoutesData.routes[1];
-        const coordsAlt = alternativeRouteObj.geometry.coordinates;
-        // ✅ CORRECTIF 1 (bis) : Inversion également sur la route alternative
+    if (allRoutesData.features.length > 1) {
+        alternativeFeature = allRoutesData.features[1];
+        const coordsAlt = alternativeFeature.geometry.coordinates;
         latlngsAlternative = coordsAlt.map(point => [point[1], point[0]]);
         drawGrayRoute(latlngsAlternative);
     } else {
@@ -275,13 +249,11 @@ async function getRoute(){
     
     drawWindRoute(latlngsNormal);
 
-// On remplace les anciens appels par ceux-ci :
-    const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
-    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
+    const normalScore = calculateWindScore(latlngsNormal, normalFeature);
+const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature);
 
-    // ✅ CORRECTIF 2 : Nettoyage des variables fantômes, accès direct via summary.duration
-    const routesArrayMock = { duration: normalRouteObj.summary.duration };
-    const alternativeMock = { duration: alternativeRouteObj.summary.duration };
+    const routesArrayMock = { duration: normalFeature.properties.summary.duration };
+    const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
 
     const choice = chooseBestRoute(
         routesArrayMock,
@@ -292,55 +264,41 @@ async function getRoute(){
 
     const windGain = calculateWindGain(normalScore, alternativeScore);
 
-    let recommendation = choice === "alternative" && allRoutesData.routes.length > 1
-        ? "🌱 CycloWind recommande l'alternative (Mieux abritée)"
-        : "🚴 CycloWind recommande ce trajet (Plus abrité ou rapide)" ;
+    let recommendation = choice === "alternative" && allRoutesData.features.length > 1
+        ? "🌱 CycloWind recommande l'alternative"
+        : "🚴 CycloWind recommande ce trajet";
 
     // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
            function updateWindText(currentView, activeScore) {
-       // ✅ CORRIGÉ 1 : Remplacement par les nouveaux objets de routes valides
-        const routeActive = currentView === "normale" ? normalRouteObj : alternativeRouteObj;
-        
-        // ✅ CORRIGÉ 2 : Accès direct à summary.distance sans passer par .properties
-        const distanceKm = (routeActive.summary.distance / 1000).toFixed(1);
+        const featureActive = currentView === "normale" ? normalFeature : alternativeFeature;
+        const distanceKm = (featureActive.properties.summary.distance / 1000).toFixed(1);
 
         // --- CALCUL DE LA DIFFÉRENCE RÉELLE ---
         // (Score Normal - Score Alternatif) / Score Normal * 100
         const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
 
         let gainText = "";
-        let dynamiqueRecommendation = "";
-               
-        if (allRoutesData.routes.length <= 1) {
+
+        if (allRoutesData.features.length <= 1) {
             // Cas 1 : L'API n'a pas trouvé d'autre rue physique
             gainText = "🌬️ Aucune route alternative disponible";
-            dynamiqueRecommendation = "🚴 Seul trajet trouvé";
         } 
         // 🔥 AJUSTEMENT ICI : Si l'écart est inférieur à 5% (en plus ou en moins), les routes sont jugées ÉGALES
         else if (Math.abs(rawGain) < 5) { 
             gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
-            dynamiqueRecommendation = currentView === "alternative" 
-                ? "🚴 Trajet équivalent, mais route initiale plus directe"
-                : "🚴 CycloWind recommande ce trajet initial";
         } 
         else if (rawGain >= 5) { 
             // Cas 3 : L'alternative est MEILLEURE (Gain positif)
              gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
-            dynamiqueRecommendation = currentView === "alternative"
-            ? "🌱  Route assez protégée"
-                : "💡 voir l'Alternative abritée";
         } 
         else {
             // Cas 4 : L'alternative est MOINS BONNE (Gain négatif)
             // On utilise Math.abs() pour transformer le chiffre négatif (ex: -15) en positif (ex: 15)
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
-            dynamiqueRecommendation = currentView === "alternative" 
-            ? "⚠️ Route alternative plus exposée"
-                : "🚴 Trajet initial bien plus abrité";
         }
 
         document.getElementById("windInfo").innerHTML = `
-           <strong>${dynamiqueRecommendation}</strong>
+            ${recommendation}
             <br>
             📍 Vue : Route ${currentView}
             <br>
@@ -363,7 +321,7 @@ async function getRoute(){
 
     const toggleBtn = document.getElementById("toggleRouteBtn");
     
-    if (allRoutesData.routes.length > 1) {
+    if (allRoutesData.features.length > 1) {
         toggleBtn.style.display = "block";
         let showingAlternative = false;
         toggleBtn.innerText = "Voir la route alternative";
@@ -420,12 +378,12 @@ function startNavigation() {
         }
         
         // 🔥 INITIALISATION DU ZOOM MÉMOIRE : 17 au premier clic
-        window.currentNavZoom = 18;
+        window.currentNavZoom = 17;
         window.map.setView(window.userPosition, window.currentNavZoom);
 
         // 2. Glissement physique de l'écran en pixels pour remonter la flèche bleue
         setTimeout(() => {
-            window.map.panBy([0, -140], { animate: true });
+            window.map.panBy([0, -5], { animate: true });
         }, 250);
     } else {
         window.isNavigating = false;
