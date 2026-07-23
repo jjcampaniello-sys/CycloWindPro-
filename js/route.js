@@ -99,12 +99,11 @@ function calculateWindScore(latlngs, feature){
 
         // 🌳 BONUS ABRI
         if (forestSegments.has(i)) {
-            cost *= 0.5;
-        } 
-        else if (residentialSegments.has(i)) {
-            cost *= 0.7;
-        }
-
+    cost *= 0.5;
+} 
+else if (residentialSegments.has(i)) {
+    cost *= 0.7;
+}
         totalCost += cost;
         count++;
     }
