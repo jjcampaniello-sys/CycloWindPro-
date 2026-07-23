@@ -1,5 +1,5 @@
 // 🔥 ALERTE DE TEST DE CHARGEMENT
-alert("route.js chargé avec succès !");
+alert("route.js mis à jour et chargé !");
 
 // Variables d'échappement pour masquer les index numériques du filtre système
 const indexZero = 0;
@@ -21,7 +21,7 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
+    const url = "https://openrouteservice.org";
   
     const body = {
         coordinates: [
@@ -56,8 +56,9 @@ function calculateWindScore(latlngs, estUneRueAbritee = false){
         const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
         let cost = windCost(direction, currentWindDirection, currentWindSpeed);
 
+        // Si l'adresse contient un mot-clé résidentiel, on applique l'abri des bâtiments
         if (estUneRueAbritee) {
-            cost = cost * 0.7; 
+            cost = cost * 0.7; // 30% d'effort en moins face au vent
         }
 
         totalCost += cost;
@@ -150,7 +151,6 @@ async function getRoute(){
         alternativeFeature = allRoutesData.features[indexUn];
         const coordsAlt = alternativeFeature.geometry.coordinates;
         latlngsAlternative = coordsAlt.map(point => [point[indexUn], point[indexZero]]);
-        drawGrayRoute(latlngsAlternative);
     }
 
     window.latlngsNormalPersist = latlngsNormal;
@@ -160,8 +160,13 @@ async function getRoute(){
     const firstDir = getSegmentDirection(latlngsNormal[indexZero], latlngsNormal[indexUn]);
     await getWind(start.lat, start.lng, firstDir);
     
+    // 🔥 CORRECTION TRACÉ : On nettoie et on dessine la route principale ET l'alternative en gris au même moment
     window.routeGroup.clearLayers();
     drawWindRoute(latlngsNormal);
+    
+    if (allRoutesData.features.length > 1) {
+        drawGrayRoute(latlngsAlternative);
+    }
 
     const estAbritee = window.destination.isResidential || false;
 
@@ -244,6 +249,8 @@ async function getRoute(){
                 showingAlternative = true;
             } else {
                 drawWindRoute(window.latlngsNormalPersist);
+                // On redessine le tracé alternatif gris en fond quand on revient sur la principale
+                drawGrayRoute(window.latlngsAlternativePersist);
                 toggleBtn.innerText = "Voir la route alternative";
                 updateWindText("normale", normalScore);
                 showingAlternative = false;
@@ -276,7 +283,8 @@ function startNavigation() {
             windInfoPanel.classList.add("nav-hidden");
         }
 
-        window.currentNavZoom = window.map.getZoom() || 19;
+        // 🔥 CORRECTION INTENT_ZOOM : On force un zoom initial puissant de 18 pour le départ
+        window.currentNavZoom = 18;
         window.map.setView(window.userPosition, window.currentNavZoom);
 
         setTimeout(() => {
@@ -291,11 +299,3 @@ function startNavigation() {
             windInfoPanel.classList.remove("nav-hidden");
         }
 
-        if (window.latlngsNormalPersist) {
-            window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), { 
-                padding: L.point(50, 50),
-                maxZoom: 15
-            });
-        }
-    }
-}
