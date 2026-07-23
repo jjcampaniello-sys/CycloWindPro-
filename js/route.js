@@ -27,7 +27,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-    extra_info: ["waytype", "surface"]   
+   extra_info: ["roadattributes", "surface", "waytype"] 
         // ✅ nécessaire pour tracer
     geometry_format: "geojson"
 };
