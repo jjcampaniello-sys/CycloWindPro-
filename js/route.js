@@ -25,8 +25,9 @@ async function getAlternativeRoute(start, endLat, endLon) {
             target_count: 3,    
             share_factor: 0.4,  
             weight_factor: 1.8  
-        }
-    };
+        },
+    extra_info: ["waytype", "surface"]
+};
 
     const response = await fetch(url, {
         method: "POST",
@@ -40,28 +41,75 @@ async function getAlternativeRoute(start, endLat, endLon) {
     const data = await response.json();
     return data; 
 }
+function extractSegments(feature){
 
-function calculateWindScore(latlngs){
+    const forestSegments = new Set();
+    const residentialSegments = new Set();
+
+    if(!feature.properties.extra_info) {
+        return {forestSegments, residentialSegments};
+    }
+
+    const extras = feature.properties.extra_info;
+
+    if(extras.waytype){
+        extras.waytype.values.forEach(v => {
+
+            const from = v[0];
+            const to = v[1];
+            const type = v[2];
+
+            // 🌳 chemins nature / forêt
+            if(type === 40 || type === 41){
+                for(let i = from; i <= to; i++){
+                    forestSegments.add(i);
+                }
+            }
+
+            // 🏠 zones résidentielles
+            if(type === 20 || type === 21){
+                for(let i = from; i <= to; i++){
+                    residentialSegments.add(i);
+                }
+            }
+        });
+    }
+
+    return {forestSegments, residentialSegments};
+}
+function calculateWindScore(latlngs, feature){
+
+    const {forestSegments, residentialSegments} = extractSegments(feature);
+
     let totalCost = 0;
     let count = 0;
 
     for(let i = 0; i < latlngs.length - 1; i++){
+
         const direction = getSegmentDirection(
             latlngs[i],
             latlngs[i+1]
         );
 
-        const cost = windCost(
+        let cost = windCost(
             direction,
             currentWindDirection,
             currentWindSpeed
         );
 
+        // 🌳 BONUS ABRI
+        if (forestSegments.has(i)) {
+            cost *= 0.5;
+        } 
+        else if (residentialSegments.has(i)) {
+            cost *= 0.7;
+        }
+
         totalCost += cost;
         count++;
     }
 
-    return totalCost / count;
+    return count > 0 ? totalCost / count : 0;
 }
 
 function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
@@ -191,8 +239,8 @@ async function getRoute(){
     
     drawWindRoute(latlngsNormal);
 
-    const normalScore = calculateWindScore(latlngsNormal);
-    const alternativeScore = calculateWindScore(latlngsAlternative);
+    const normalScore = calculateWindScore(latlngsNormal, normalFeature);
+const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature);
 
     const routesArrayMock = { duration: normalFeature.properties.summary.duration };
     const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
