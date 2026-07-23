@@ -8,11 +8,11 @@ function getSegmentDirection(p1, p2){
 
     if(angle < 0){
         angle += 360;
+      }  
           // 🔥 LE CORRECTIF CHIRURGICAL : On retourne l'angle de la rue à 180°
     // pour compenser l'inversion géométrique d'OpenRouteService
     angle = (angle + 180) % 360;
-    }
-
+    
     return angle;
 }
 
