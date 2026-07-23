@@ -98,15 +98,7 @@ const extras = routeObj.segments[0].extras;
             }
         });
     }
-// ✅ DEBUG ICI
-const debugDiv = document.getElementById("debug");
 
-if (debugDiv) {
-    debugDiv.innerHTML = `
-        🌲 Segments forêt: ${forestSegments.size}<br>
-        🏠 Segments résidentiel: ${residentialSegments.size}
-    `;
-}
     return {forestSegments, residentialSegments};
 }
 function calculateWindScore(latlngs, routeObj){
