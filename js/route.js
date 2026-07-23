@@ -47,8 +47,9 @@ function extractSegments(feature){
 
     const forestSegments = new Set();
     const residentialSegments = new Set();
-
+alert("avant extra_info");
     if(!feature.properties.extra_info) {
+         alert("extra_info trouvé");
         return {forestSegments, residentialSegments};
     }
 
