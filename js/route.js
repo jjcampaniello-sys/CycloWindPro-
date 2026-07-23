@@ -1,4 +1,5 @@
-// Direction segment route
+// route.js - Direction segment route avec détection d'obstacles (Bâtiments & Arbres)
+
 function getSegmentDirection(p1, p2){
     const dy = p2[0] - p1[0];
     const dx = p2[1] - p1[1];
@@ -14,19 +15,20 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
+    const url = "https://openrouteservice.org";
   
+    // Construction sans crochets pour éviter les coupures automatiques
+    const coordStart = Array(start.lng, start.lat);
+    const coordEnd = Array(endLon, endLat);
+
     const body = {
-        coordinates: [
-            [start.lng, start.lat],
-            [endLon, endLat]
-        ],
+        coordinates: Array(coordStart, coordEnd),
         alternative_routes: {
             target_count: 3,    
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-         // 🔥 AJOUT CRITIQUE : Demande officiellement à l'API de renvoyer le type de route et la surface
+        // Demande des attributs cachés OpenStreetMap pour voir les obstacles
         extra_info: ["roadattributes", "surface"]
     };
 
@@ -43,23 +45,249 @@ async function getAlternativeRoute(start, endLat, endLon) {
     return data; 
 }
 
-function calculateWindScore(latlngs, extras) {
+// Modèle de calcul : Combine géométrie et obstacles (Bâtiments / Arbres)
+function calculateWindScore(latlngs, extras){
     let totalCost = 0;
     let count = 0;
 
-    // Création de dictionnaires rapides pour associer l'index du segment à sa protection
     let residentialSegments = new Set();
     let forestSegments = new Set();
 
-    // Analyse des attributs de route renvoyés par ORS
+    // 1. Détection des zones résidentielles (bâtiments protecteurs)
     if (extras && extras.roadattributes && extras.roadattributes.values) {
         extras.roadattributes.values.forEach(item => {
-            const startIndex = item[0];
-            const endIndex = item[1];
-            const attributeType = item[2]; 
+            const indexDebut = item[0];
+            const indexFin = item[1];
+            const typeAttribut = item[2]; 
             
-            // Selon la documentation ORS, les types résidentiels/urbains denses (souvent taggués 1 ou 3)
-            // indiquent la présence de bâtiments protecteurs de chaque côté de la chaussée
+            if (typeAttribut === 1 || typeAttribut === 3) {
+                for (let k = indexDebut; k < indexFin; k++) {
+                    residentialSegments.add(k);
+                }
+            }
+        });
+    }
+
+    // 2. Détection des parcs et forêts (surfaces naturelles entourées d'arbres)
+    if (extras && extras.surface && extras.surface.values) {
+        extras.surface.values.forEach(item => {
+            const indexDebut = item[0];
+            const indexFin = item[1];
+            const typeSurface = item[2]; 
+
+            if (typeSurface >= 5) {
+                for (let k = indexDebut; k < indexFin; k++) {
+                    forestSegments.add(k);
+                }
+            }
+        });
+    }
+
+    // 3. Application du score segment par segment avec le bonus d'obstacle
+    for(let i = 0; i < latlngs.length - 1; i++){
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
+        let cost = windCost(direction, currentWindDirection, currentWindSpeed);
+
+        if (forestSegments.has(i)) {
+            cost = cost * 0.5; // Arbres brisent le vent de 50%
+        } 
+        else if (residentialSegments.has(i)) {
+            cost = cost * 0.7; // Maisons brisent le vent de 30%
+        }
+
+        totalCost += cost;
+        count++;
+    }
+
+    return count > 0 ? (totalCost / count) : 0;
+}
+
+function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
+    const normalTime = normalRoute.duration;
+    const alternativeTime = alternativeRoute.duration;
+    const windGain = normalScore - alternativeScore;
+
+    if(windGain > 3 && alternativeTime < normalTime * 1.2){
+        return "alternative";
+    }
+    return "normal";
+}
+
+function calculateWindGain(scoreNormal, scoreAlternative){
+    if(scoreNormal <= 0) return 0;
+    const gain = ((scoreNormal - scoreAlternative) / scoreNormal) * 100;
+    return Math.max(0, gain);
+}
+
+function drawWindRoute(latlngs){
+    for(let i = 0; i < latlngs.length - 1; i++){
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
+        const cost = windCost(direction, currentWindDirection, currentWindSpeed);
+
+        let color = "green";
+        if(cost > 20) color = "red";
+        else if(cost > 8) color = "orange";
+
+        const line = L.polyline(
+            Array(latlngs[i], latlngs[i+1]),
+            { color: color, weight: 4, opacity: 0.7 }
+        ).addTo(window.routeGroup);
+
+        routeLayers.push(line);
+    }
+}
+
+function drawGrayRoute(latlngs){
+    const line = L.polyline(latlngs, { color: "gray", weight: 3, opacity: 0.5 }).addTo(window.routeGroup);
+    routeLayers.push(line);
+}
+
+// Calcul et tracé des itinéraires
+async function getRoute(){
+    alert("getRoute démarré");
+    if(!window.userPosition){
+        alert("Définissez votre position d'abord");
+        return;
+    }
+    
+    if(!window.destination){
+        alert("Choisissez une destination dans la liste");
+        return;
+    }
+    
+    const start = {   
+        lat: window.userLat,
+        lng: window.userLon
+    };
+    
+    alert("Départ : " + start.lat + " / " + start.lng);
+    const endLat = window.destination.lat;
+    const endLon = window.destination.lon;
+    
+    const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
+    
+    if (!allRoutesData || !allRoutesData.features || allRoutesData.features.length === 0) {
+        alert("Aucun itinéraire trouvé");
+        return;
+    }
+
+    const normalFeature = allRoutesData.features[0];
+    const coordsNormal = normalFeature.geometry.coordinates;
+    const latlngsNormal = coordsNormal.map(point => Array(point[1], point[0]));
+    
+    // 🔥 Application de la détection d'obstacles (extras)
+    const normalScore = calculateWindScore(latlngsNormal, normalFeature.properties.extras);
+
+    let latlngsAlternative = latlngsNormal; 
+    let alternativeFeature = normalFeature;
+    let alternativeScore = normalScore;
+
+    if (allRoutesData.features.length > 1) {
+        alternativeFeature = allRoutesData.features[1];
+        const coordsAlt = alternativeFeature.geometry.coordinates;
+        latlngsAlternative = coordsAlt.map(point => Array(point[1], point[0]));
+        alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature.properties.extras);
+        drawGrayRoute(latlngsAlternative);
+    }
+
+    window.latlngsNormalPersist = latlngsNormal;
+    window.latlngsAlternativePersist = latlngsAlternative;
+    window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
+
+    const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
+    await getWind(start.lat, start.lng, firstDir);
+    
+    window.routeGroup.clearLayers();
+    drawWindRoute(latlngsNormal);
+
+    const routesArrayMock = { duration: normalFeature.properties.summary.duration };
+    const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
+
+    const choice = chooseBestRoute(
+        routesArrayMock,
+        alternativeMock,
+        normalScore,
+        alternativeScore
+    );
+
+    const windGain = calculateWindGain(normalScore, alternativeScore);
+
+    let recommendation = choice === "alternative" && allRoutesData.features.length > 1
+        ? "🌱 CycloWind recommande l'alternative"
+        : "🚴 CycloWind recommande ce trajet";
+
+    // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
+    function updateWindText(currentView, activeScore) {
+        const featureActive = currentView === "normale" ? normalFeature : alternativeFeature;
+        const distanceKm = (featureActive.properties.summary.distance / 1000).toFixed(1);
+
+        const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
+        let gainText = "";
+
+        if (allRoutesData.features.length <= 1) {
+            gainText = "🌬️ Aucune route alternative disponible";
+        } 
+        else if (Math.abs(rawGain) < 5) { 
+            gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
+        } 
+        else if (rawGain >= 5) { 
+             gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
+        } 
+        else {
+            gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
+        }
+
+        document.getElementById("windInfo").innerHTML = `
+            ${recommendation}
+            <br>
+            📍 Vue : Route ${currentView}
+            <br>
+            📏 Distance : ${distanceKm} km
+            <br>
+            ${gainText}
+            <br>
+            📊 Indice effort vent : ${activeScore.toFixed(1)}
+        `;
+    }
+
+    updateWindText("normale", normalScore);
+
+    // Ajustement de la vue d'ensemble sans crochets bruts
+    if (latlngsNormal && latlngsNormal.length > 0) {
+        const bounds = L.latLngBounds(latlngsNormal);
+        const margePixelX = 50;
+        const margePixelY = 50;
+        const objetPadding = L.point(margePixelX, margePixelY);
+
+        window.map.fitBounds(bounds, { 
+            padding: objetPadding,
+            maxZoom: 15
+        });
+    }
+
+    const toggleBtn = document.getElementById("toggleRouteBtn");
+    
+    if (allRoutesData.features.length > 1) {
+        toggleBtn.style.display = "block";
+        let showingAlternative = false;
+        toggleBtn.innerText = "Voir la route alternative";
+
+        toggleBtn.onclick = function() {
+            window.routeGroup.clearLayers();
+            if (typeof routeLayers !== 'undefined') { routeLayers = Array(); }
+
+            if (!showingAlternative) {
+                drawWindRoute(window.latlngsAlternativePersist);
+                toggleBtn.innerText = "Voir la route normale";
+                updateWindText("alternative", alternativeScore);
+                showingAlternative = true;
+            } else {
+                drawWindRoute(window.latlngsNormalPersist);
+                toggleBtn.innerText = "Voir la route alternative";
+                updateWindText("normale", normalScore);
+                showingAlternative = false;
+            }
+        };
             if (attributeType === 1 || attributeType === 3) {
                 for (let k = startIndex; k < endIndex; k++) {
                     residentialSegments.add(k);
