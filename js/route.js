@@ -43,28 +43,71 @@ async function getAlternativeRoute(start, endLat, endLon) {
     return data; 
 }
 
-function calculateWindScore(latlngs){
+function calculateWindScore(latlngs, extras) {
     let totalCost = 0;
     let count = 0;
 
-    for(let i = 0; i < latlngs.length - 1; i++){
-        const direction = getSegmentDirection(
-            latlngs[i],
-            latlngs[i+1]
-        );
+    // Création de dictionnaires rapides pour associer l'index du segment à sa protection
+    let residentialSegments = new Set();
+    let forestSegments = new Set();
 
-        const cost = windCost(
-            direction,
-            currentWindDirection,
-            currentWindSpeed
-        );
+    // Analyse des attributs de route renvoyés par ORS
+    if (extras && extras.roadattributes && extras.roadattributes.values) {
+        extras.roadattributes.values.forEach(item => {
+            const startIndex = item[0];
+            const endIndex = item[1];
+            const attributeType = item[2]; 
+            
+            // Selon la documentation ORS, les types résidentiels/urbains denses (souvent taggués 1 ou 3)
+            // indiquent la présence de bâtiments protecteurs de chaque côté de la chaussée
+            if (attributeType === 1 || attributeType === 3) {
+                for (let k = startIndex; k < endIndex; k++) {
+                    residentialSegments.add(k);
+                }
+            }
+        });
+    }
+
+    // Analyse des surfaces pour détecter les parcs et forêts (chemins non asphaltés)
+    if (extras && extras.surface && extras.surface.values) {
+        extras.surface.values.forEach(item => {
+            const startIndex = item[0];
+            const endIndex = item[1];
+            const surfaceType = item[2]; // Exemple : 6 = chemin de terre, 7 = gravier
+
+            // Les surfaces naturelles (gravier, terre, sable) correspondent presque toujours à des parcs ou forêts
+            if (surfaceType >= 5) {
+                for (let k = startIndex; k < endIndex; k++) {
+                    forestSegments.add(k);
+                }
+            }
+        });
+    }
+
+    // Calcul de la boucle principale segment par segment
+    for(let i = 0; i < latlngs.length - 1; i++){
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
+        let cost = windCost(direction, currentWindDirection, currentWindSpeed);
+
+        // 🔥 APPLICATION DU BONUS D'OBSTACLE (L'ABRI)
+        if (forestSegments.has(i)) {
+            // Un chemin forestier ou un parc brise le vent de moitié grâce aux arbres !
+            cost = cost * 0.5; 
+            console.log(`Segment ${i} : Protection arbres activée (-50% vent)`);
+        } 
+        else if (residentialSegments.has(i)) {
+            // Une rue résidentielle étroite réduit l'effort de 30% grâce aux maisons !
+            cost = cost * 0.7; 
+            console.log(`Segment ${i} : Protection bâtiments activée (-30% vent)`);
+        }
 
         totalCost += cost;
         count++;
     }
 
-    return totalCost / count;
+    return count > 0 ? (totalCost / count) : 0;
 }
+
 
 function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
     const normalTime = normalRoute.duration;
@@ -158,7 +201,7 @@ async function getRoute(){
         lng: window.userPosition[1]
     };
     
-       const endLat = window.destination.lat;
+    const endLat = window.destination.lat;
     const endLon = window.destination.lon;
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
@@ -193,8 +236,13 @@ async function getRoute(){
     
     drawWindRoute(latlngsNormal);
 
-    const normalScore = calculateWindScore(latlngsNormal);
-    const alternativeScore = calculateWindScore(latlngsAlternative);
+    // =========================================================================
+    // 🔥 ZONE D'INTEGRATION : MODIFICATION DE VOS CALCULS DE SCORES DE VENT
+    // On passe désormais les propriétés "extras" (maisons/arbres) à la fonction
+    // =========================================================================
+    const normalScore = calculateWindScore(latlngsNormal, normalFeature.properties.extras);
+    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature.properties.extras);
+    // =========================================================================
 
     const routesArrayMock = { duration: normalFeature.properties.summary.duration };
     const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
@@ -213,31 +261,25 @@ async function getRoute(){
         : "🚴 CycloWind recommande ce trajet";
 
     // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
-           function updateWindText(currentView, activeScore) {
+    function updateWindText(currentView, activeScore) {
         const featureActive = currentView === "normale" ? normalFeature : alternativeFeature;
         const distanceKm = (featureActive.properties.summary.distance / 1000).toFixed(1);
 
         // --- CALCUL DE LA DIFFÉRENCE RÉELLE ---
-        // (Score Normal - Score Alternatif) / Score Normal * 100
         const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
 
         let gainText = "";
 
         if (allRoutesData.features.length <= 1) {
-            // Cas 1 : L'API n'a pas trouvé d'autre rue physique
             gainText = "🌬️ Aucune route alternative disponible";
         } 
-        // 🔥 AJUSTEMENT ICI : Si l'écart est inférieur à 5% (en plus ou en moins), les routes sont jugées ÉGALES
         else if (Math.abs(rawGain) < 5) { 
             gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
         } 
         else if (rawGain >= 5) { 
-            // Cas 3 : L'alternative est MEILLEURE (Gain positif)
              gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
         } 
         else {
-            // Cas 4 : L'alternative est MOINS BONNE (Gain négatif)
-            // On utilise Math.abs() pour transformer le chiffre négatif (ex: -15) en positif (ex: 15)
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
         }
 
@@ -254,8 +296,6 @@ async function getRoute(){
         `;
     }
 
-
-
     updateWindText("normale", normalScore);
 
     if (latlngsNormal && latlngsNormal.length > 0) {
@@ -270,18 +310,16 @@ async function getRoute(){
         let showingAlternative = false;
         toggleBtn.innerText = "Voir la route alternative";
 
-               toggleBtn.onclick = function() {
+        toggleBtn.onclick = function() {
             window.routeGroup.clearLayers();
             if (typeof routeLayers !== 'undefined') { routeLayers = []; }
 
             if (!showingAlternative) {
-                // L'utilisateur veut voir l'alternative
                 drawWindRoute(window.latlngsAlternativePersist);
                 toggleBtn.innerText = "Voir la route normale";
                 updateWindText("alternative", alternativeScore);
                 showingAlternative = true;
             } else {
-                // L'utilisateur revient à la route normale
                 drawWindRoute(window.latlngsNormalPersist);
                 toggleBtn.innerText = "Voir la route alternative";
                 updateWindText("normale", normalScore);
@@ -295,12 +333,11 @@ async function getRoute(){
     window.drawWindRoute = drawWindRoute;
 }
 
-// 🔥 AJOUT DE LA FONCTION DE NAVIGATION SÉCURISÉE EN PIXELS (Pour Apple & Android)
+// 🔥 REPARÉ ET ENTIÈREMENT REFERMÉ : LOGIQUE DU BOUTON DEMARRER
 function startNavigation() {
     const btn = document.getElementById("startNavBtn");
     if (!btn) return;
 
-    // 🔥 CORRECTIF : On cible d'abord le conteneur global droit s'il existe, sinon l'ID windInfo directement
     let windInfoPanel = document.querySelector(".wind-container-right");
     if (!windInfoPanel) {
         windInfoPanel = document.getElementById("windInfo");
@@ -316,32 +353,28 @@ function startNavigation() {
         btn.innerText = "Arrêter";
         btn.style.backgroundColor = "#e74c3c"; // Rouge
         
- // 🔥 MODIFICATION : On AJOUTE la classe pour faire DISPARAÎTRE l'encadré de suite au clic
         if (windInfoPanel) {
             windInfoPanel.classList.add("nav-hidden");
         }
         
-        // 🔥 INITIALISATION DU ZOOM MÉMOIRE : 17 au premier clic
         window.currentNavZoom = 17;
         window.map.setView(window.userPosition, window.currentNavZoom);
 
-        // 2. Glissement physique de l'écran en pixels pour remonter la flèche bleue
         setTimeout(() => {
-            window.map.panBy([0, -5], { animate: true });
+            window.map.panBy([0, -140], { animate: true }); // Aligné sur votre décalage fluide de 140px
         }, 250);
     } else {
         window.isNavigating = false;
         btn.innerText = "Démarrer";
         btn.style.backgroundColor = "#2ecc71"; // Vert
 
-         // 🔥 MODIFICATION : On RETIRE la classe pour faire RÉAPPARAÎTRE l'encadré au clic sur Arrêter
         if (windInfoPanel) {
             windInfoPanel.classList.remove("nav-hidden");
         }
 
         if (window.latlngsNormalPersist) {
             window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), { 
-                padding: [50, 50] 
+                padding: [50, 50]
             });
         }
     }
