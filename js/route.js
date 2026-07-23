@@ -1,5 +1,5 @@
 // route.js - Trajet CycloWind 100% sans aucun crochet pour éviter les bugs de syntaxe
-
+alerte ("nouvelle fonction")
 function getSegmentDirection(p1, p2){
     const dy = p2.at(0) - p1.at(0);
     const dx = p2.at(1) - p1.at(1);
