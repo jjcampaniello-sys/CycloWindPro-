@@ -278,27 +278,37 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
         const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
 
         let gainText = "";
-
+ let dynamiqueRecommendation = "";
         if (allRoutesData.features.length <= 1) {
             // Cas 1 : L'API n'a pas trouvé d'autre rue physique
             gainText = "🌬️ Aucune route alternative disponible";
+            dynamiqueRecommendation = "🚴 Seul trajet trouvé";
         } 
         // 🔥 AJUSTEMENT ICI : Si l'écart est inférieur à 5% (en plus ou en moins), les routes sont jugées ÉGALES
         else if (Math.abs(rawGain) < 5) { 
             gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
+            dynamiqueRecommendation = currentView === "alternative" 
+                ? "🚴 Trajet équivalent, mais route initiale plus directe"
+                : "🚴 CycloWind recommande ce trajet initial";
         } 
         else if (rawGain >= 5) { 
             // Cas 3 : L'alternative est MEILLEURE (Gain positif)
              gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
+            dynamiqueRecommendation = currentView === "alternative"
+                ? "🌱  Route assez protégée"
+                : "💡 voir l'Alternative abritée";
         } 
         else {
             // Cas 4 : L'alternative est MOINS BONNE (Gain négatif)
             // On utilise Math.abs() pour transformer le chiffre négatif (ex: -15) en positif (ex: 15)
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
+            dynamiqueRecommendation = currentView === "alternative" 
+                ? "⚠️ Route alternative plus exposée"
+                : "🚴 Trajet initial bien plus abrité";
         }
 
         document.getElementById("windInfo").innerHTML = `
-            ${recommendation}
+             <strong>${dynamiqueRecommendation}</strong>
             <br>
             📍 Vue : Route ${currentView}
             <br>
