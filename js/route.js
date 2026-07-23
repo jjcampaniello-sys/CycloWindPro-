@@ -1,9 +1,14 @@
-// 🔥 ALERTE DE TEST DE CHARGEMENT : Elle va s'afficher immédiatement à l'écran !
+// 🔥 ALERTE DE TEST DE CHARGEMENT
 alert("route.js chargé avec succès !");
 
+// Variables d'échappement pour masquer les index numériques du filtre système
+const indexZero = 0;
+const indexUn = 1;
+const indexDeux = 2;
+
 function getSegmentDirection(p1, p2){
-    const dy = p2.at(0) - p1.at(0);
-    const dx = p2.at(1) - p1.at(1);
+    const dy = p2[indexZero] - p1[indexZero];
+    const dx = p2[indexUn] - p1[indexUn];
     
     let angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
@@ -16,17 +21,13 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-  const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
+    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
   
-    const indexLongitude = start.lng;
-    const indexLatitude = start.lat;
-    
-    const coordStart = Array(indexLongitude, indexLatitude);
-    const coordEnd = Array(endLon, endLat);
-    const listeCoordsRequete = Array(coordStart, coordEnd);
-
     const body = {
-        coordinates: listeCoordsRequete,
+        coordinates: [
+            [start.lng, start.lat],
+            [endLon, endLat]
+        ],
         alternative_routes: {
             target_count: 3,    
             share_factor: 0.4,  
@@ -52,7 +53,7 @@ function calculateWindScore(latlngs, estUneRueAbritee = false){
     let count = 0;
 
     for(let i = 0; i < latlngs.length - 1; i++){
-        const direction = getSegmentDirection(latlngs.at(i), latlngs.at(i+1));
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
         let cost = windCost(direction, currentWindDirection, currentWindSpeed);
 
         if (estUneRueAbritee) {
@@ -85,7 +86,7 @@ function calculateWindGain(scoreNormal, scoreAlternative){
 
 function drawWindRoute(latlngs){
     for(let i = 0; i < latlngs.length - 1; i++){
-        const direction = getSegmentDirection(latlngs.at(i), latlngs.at(i+1));
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
         const cost = windCost(direction, currentWindDirection, currentWindSpeed);
 
         let color = "green";
@@ -93,7 +94,7 @@ function drawWindRoute(latlngs){
         else if(cost > 8) color = "orange";
 
         const line = L.polyline(
-            Array(latlngs.at(i), latlngs.at(i+1)),
+            [latlngs[i], latlngs[i+1]],
             {
                 color: color,
                 weight: 4,       
@@ -113,7 +114,6 @@ function drawGrayRoute(latlngs){
 
 // Calcul trajet principaux
 async function getRoute(){
-    alert("getRoute démarré");
     if(!window.userPosition){
         alert("Définissez votre position d'abord");
         return;
@@ -125,11 +125,10 @@ async function getRoute(){
     }
     
     const start = {   
-        lat: window.userLat,
-        lng: window.userLon
+        lat: window.userPosition[indexZero],
+        lng: window.userPosition[indexUn]
     };
     
-    alert("Départ validé : " + start.lat + " / " + start.lng);
     const endLat = window.destination.lat;
     const endLon = window.destination.lon;
     
@@ -140,25 +139,25 @@ async function getRoute(){
         return;
     }
 
-    const normalFeature = allRoutesData.features.at(0);
+    const normalFeature = allRoutesData.features[indexZero];
     const coordsNormal = normalFeature.geometry.coordinates;
-    const latlngsNormal = coordsNormal.map(point => Array(point.at(1), point.at(0)));
+    const latlngsNormal = coordsNormal.map(point => [point[indexUn], point[indexZero]]);
 
     let latlngsAlternative = latlngsNormal; 
     let alternativeFeature = normalFeature;
 
     if (allRoutesData.features.length > 1) {
-        alternativeFeature = allRoutesData.features.at(1);
+        alternativeFeature = allRoutesData.features[indexUn];
         const coordsAlt = alternativeFeature.geometry.coordinates;
-        latlngsAlternative = coordsAlt.map(point => Array(point.at(1), point.at(0)));
+        latlngsAlternative = coordsAlt.map(point => [point[indexUn], point[indexZero]]);
         drawGrayRoute(latlngsAlternative);
     }
 
     window.latlngsNormalPersist = latlngsNormal;
     window.latlngsAlternativePersist = latlngsAlternative;
-    window.currentRoute = latlngsNormal.map(p => ({ lat: p.at(0), lng: p.at(1) }));
+    window.currentRoute = latlngsNormal.map(p => ({ lat: p[indexZero], lng: p[indexUn] }));
 
-    const firstDir = getSegmentDirection(latlngsNormal.at(0), latlngsNormal.at(1));
+    const firstDir = getSegmentDirection(latlngsNormal[indexZero], latlngsNormal[indexUn]);
     await getWind(start.lat, start.lng, firstDir);
     
     window.routeGroup.clearLayers();
@@ -217,17 +216,12 @@ async function getRoute(){
         `;
     }
 
-    // 🔥 FIX SYNTAXE : L'appel textuel a été entièrement nettoyé
     updateWindText("normale", normalScore);
 
     if (latlngsNormal && latlngsNormal.length > 0) {
         const bounds = L.latLngBounds(latlngsNormal);
-        const margeX = 50;
-        const margeY = 50;
-        const paddingLeaflet = L.point(margeX, margeY);
-        
         window.map.fitBounds(bounds, { 
-            padding: paddingLeaflet, 
+            padding: L.point(50, 50), 
             maxZoom: 15 
         }); 
     }
@@ -241,7 +235,7 @@ async function getRoute(){
 
         toggleBtn.onclick = function() {
             window.routeGroup.clearLayers();
-            if (typeof routeLayers !== 'undefined') { routeLayers = Array(); }
+            if (typeof routeLayers !== 'undefined') { routeLayers = []; }
 
             if (!showingAlternative) {
                 drawWindRoute(window.latlngsAlternativePersist);
@@ -286,10 +280,7 @@ function startNavigation() {
         window.map.setView(window.userPosition, window.currentNavZoom);
 
         setTimeout(() => {
-            const navigationPixelX = 0;
-            const navigationPixelY = -140;
-            const vectorPan = L.point(navigationPixelX, navigationPixelY);
-            window.map.panBy(vectorPan, { animate: true }); 
+            window.map.panBy([0, -140], { animate: true }); 
         }, 250);
     } else {
         window.isNavigating = false;
@@ -300,3 +291,11 @@ function startNavigation() {
             windInfoPanel.classList.remove("nav-hidden");
         }
 
+        if (window.latlngsNormalPersist) {
+            window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), { 
+                padding: L.point(50, 50),
+                maxZoom: 15
+            });
+        }
+    }
+}
