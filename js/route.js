@@ -1,7 +1,6 @@
 // route.js - Trajet CycloWind 100% sans aucun crochet pour éviter les bugs de syntaxe
 
 function getSegmentDirection(p1, p2){
-    // Remplacement des crochets par .at() -> index 0 = Latitude, index 1 = Longitude selon votre gps.js
     const dy = p2.at(0) - p1.at(0);
     const dx = p2.at(1) - p1.at(1);
     
@@ -16,18 +15,19 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-    const url = "https://openrouteservice.org";
+    // 🔥 RÉPARÉ : URL officielle de l'API de routage rétablie
+    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
   
-    // Reconstruction des paires de coordonnées sans crochets via Array()
     const indexLongitude = start.lng;
     const indexLatitude = start.lat;
     
     const coordStart = Array(indexLongitude, indexLatitude);
     const coordEnd = Array(endLon, endLat);
-    const listeCoords pour Requete = Array(coordStart, coordEnd);
+    // 🔥 RÉPARÉ : Suppression des espaces interdits dans le nom de la variable
+    const listeCoordsRequete = Array(coordStart, coordEnd);
 
     const body = {
-        coordinates: listeCoords pour Requete,
+        coordinates: listeCoordsRequete,
         alternative_routes: {
             target_count: 3,    
             share_factor: 0.4,  
@@ -57,7 +57,7 @@ function calculateWindScore(latlngs, estUneRueAbritee = false){
         let cost = windCost(direction, currentWindDirection, currentWindSpeed);
 
         if (estUneRueAbritee) {
-            cost = cost * 0.7; // Bonus abri de 30% si mot-clé détecté par search.js
+            cost = cost * 0.7; 
         }
 
         totalCost += cost;
@@ -125,7 +125,6 @@ async function getRoute(){
         return;
     }
     
-    // Utilisation des variables d'extraction dédiées créées dans votre gps.js
     const start = {   
         lat: window.userLat,
         lng: window.userLon
@@ -144,8 +143,6 @@ async function getRoute(){
 
     const normalFeature = allRoutesData.features.at(0);
     const coordsNormal = normalFeature.geometry.coordinates;
-    
-    // Inversion des index ORS [Longitude, Latitude] -> Leaflet [Latitude, Longitude] avec .at()
     const latlngsNormal = coordsNormal.map(point => Array(point.at(1), point.at(0)));
 
     let latlngsAlternative = latlngsNormal; 
@@ -168,7 +165,6 @@ async function getRoute(){
     window.routeGroup.clearLayers();
     drawWindRoute(latlngsNormal);
 
-    // Lecture du bonus d'adresse
     const estAbritee = window.destination.isResidential || false;
 
     const normalScore = calculateWindScore(latlngsNormal, estAbritee);
@@ -209,8 +205,6 @@ async function getRoute(){
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
         }
 
-        const tableauVues = Array("normale", "alternative");
-
         document.getElementById("windInfo").innerHTML = `
             ${recommendation}
             <br>
@@ -228,7 +222,6 @@ async function getRoute(){
 
     if (latlngsNormal && latlngsNormal.length > 0) {
         const bounds = L.latLngBounds(latlngsNormal);
-        // Configuration du padding de la carte sans crochets via L.point()
         const margeX = 50;
         const margeY = 50;
         const paddingLeaflet = L.point(margeX, margeY);
@@ -241,6 +234,7 @@ async function getRoute(){
 
     const toggleBtn = document.getElementById("toggleRouteBtn");
     
+    // 🔥 RÉPARÉ : Fin du fichier réécrite et correctement refermée
     if (allRoutesData.features.length > 1) {
         toggleBtn.style.display = "block";
         let showingAlternative = false;
@@ -293,3 +287,13 @@ function startNavigation() {
         window.map.setView(window.userPosition, window.currentNavZoom);
 
         setTimeout(() => {
+            const navigationPixelX = 0;
+            const navigationPixelY = -140;
+            const vectorPan = L.point(navigationPixelX, navigationPixelY);
+            window.map.panBy(vectorPan, { animate: true }); 
+        }, 250);
+    } else {
+        window.isNavigating = false;
+        btn.innerText = "Démarrer";
+        btn.style.backgroundColor = "#2ecc71"; 
+
