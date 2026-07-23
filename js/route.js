@@ -1,5 +1,6 @@
 alert("route.js réparé et chargé avec succès !");
 
+// Variables globales de sécurité pour les indexations de tableaux
 const ZERO = 0;
 const UN = 1;
 
@@ -25,7 +26,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-        extra_info: ["roadattributes", "surface"]
+        extra_info: ["waytype", "surface"]
     };
 
     const response = await fetch(url, {
@@ -41,18 +42,18 @@ async function getAlternativeRoute(start, endLat, endLon) {
     return data; 
 }
 
-function calculateWindScore(latlngs, extras) {
+function calculateWindScore(latlngs, waytypeData, surfaceData) {
     let totalCost = 0;
     let count = 0;
     let residentialSegments = new Set();
     let forestSegments = new Set();
 
-    if (extras && extras.roadattributes && extras.roadattributes.values) {
-        extras.roadattributes.values.forEach(item => {
+    if (waytypeData && waytypeData.values) {
+        waytypeData.values.forEach(item => {
             const startIndex = item[ZERO];
             const endIndex = item[UN];
             const attributeType = item[2]; 
-            if (attributeType === 1 || attributeType === 3) {
+            if (attributeType === 1 || attributeType === 2) {
                 for (let k = startIndex; k < endIndex; k++) {
                     residentialSegments.add(k);
                 }
@@ -60,8 +61,8 @@ function calculateWindScore(latlngs, extras) {
         });
     }
 
-    if (extras && extras.surface && extras.surface.values) {
-        extras.surface.values.forEach(item => {
+    if (surfaceData && surfaceData.values) {
+        surfaceData.values.forEach(item => {
             const startIndex = item[ZERO];
             const endIndex = item[UN];
             const surfaceType = item[2]; 
@@ -97,12 +98,6 @@ function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternative
         return "alternative";
     }
     return "normal";
-}
-
-function calculateWindGain(scoreNormal, scoreAlternative){
-    if(scoreNormal <= 0) return 0;
-    const gain = ((scoreNormal - scoreAlternative) / scoreNormal) * 100;
-    return Math.max(0, gain);
 }
 
 function drawWindRoute(latlngs){
@@ -141,6 +136,7 @@ async function getRoute(){
     };
     const endLat = window.destination.lat;
     const endLon = window.destination.lon;
+    
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
     
     if (!allRoutesData || !allRoutesData.features || allRoutesData.features.length === ZERO) {
@@ -150,6 +146,7 @@ async function getRoute(){
 
     const normalFeature = allRoutesData.features[ZERO];
     const coordsNormal = normalFeature.geometry.coordinates;
+    // 🔥 RÉPARÉ : Alignement des index sur les constantes UN et ZERO globales
     const latlngsNormal = coordsNormal.map(point => [point[UN], point[ZERO]]);
 
     let latlngsAlternative = latlngsNormal; 
@@ -173,14 +170,21 @@ async function getRoute(){
     
     drawWindRoute(latlngsNormal);
 
-    const normalScore = calculateWindScore(latlngsNormal, normalFeature.properties.extras);
-    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature.properties.extras);
+    let waytypeData = null;
+    let surfaceData = null;
+    if (allRoutesData.extras) {
+        waytypeData = allRoutesData.extras.waytype;
+        surfaceData = allRoutesData.extras.surface;
+    }
+
+    const normalScore = calculateWindScore(latlngsNormal, waytypeData, surfaceData);
+    const alternativeScore = calculateWindScore(latlngsAlternative, waytypeData, surfaceData);
 
     const routesArrayMock = { duration: normalFeature.properties.summary.duration };
     const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
 
     const choice = chooseBestRoute(routesArrayMock, alternativeMock, normalScore, alternativeScore);
-    const windGain = calculateWindGain(normalScore, alternativeScore);
+    const windGain = ((normalScore - alternativeScore) / normalScore) * 100;
 
     let recommendation = choice === "alternative" && allRoutesData.features.length > UN
         ? "🌱 CycloWind recommande l'alternative"
@@ -189,20 +193,19 @@ async function getRoute(){
     function updateWindText(currentView, activeScore) {
         const featureActive = currentView === "normale" ? normalFeature : alternativeFeature;
         const distanceKm = (featureActive.properties.summary.distance / 1000).toFixed(1);
-        const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
         let gainText = "";
 
         if (allRoutesData.features.length <= UN) {
             gainText = "🌬️ Aucune route alternative disponible";
         } 
-        else if (Math.abs(rawGain) < 5) { 
+        else if (Math.abs(windGain) < 5) { 
             gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
         } 
-        else if (rawGain >= 5) { 
-             gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
+        else if (windGain >= 5) { 
+             gainText = `🌱 Économie de vent : -${Math.abs(windGain).toFixed(0)}% d'effort sur l'alternative`;
         } 
         else {
-            gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
+            gainText = `⚠️ Attention : +${Math.abs(windGain).toFixed(0)}% d'effort vent sur l'alternative`;
         }
 
         document.getElementById("windInfo").innerHTML = `
@@ -278,12 +281,17 @@ function startNavigation() {
     } else {
         window.isNavigating = false;
         btn.innerText = "Démarrer";
-
-        btn.style.backgroundColor = "#2ecc71";
+        btn.style.backgroundColor = "#2ecc71"; 
         if (windInfoPanel) windInfoPanel.classList.remove("nav-hidden");
-        if (window.latlngsNormalPersist) {window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), {padding: L.point(50, 50),maxZoom: 15}
-        );
-           }
+
+        if (window.latlngsNormalPersist) {
+            // Parenthèse et option de padding Leaflet correctement alignées et refermées
+            window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), { 
+                padding: L.point(50, 50),
+                maxZoom: 15
+            });
+        }
     }
 }
+
 
