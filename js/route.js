@@ -309,6 +309,7 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
         else if (rawGain >= 5) { 
             // Cas 3 : L'alternative est MEILLEURE (Gain positif)
              gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
+            dynamiqueRecommendation = currentView === "alternative"
             ? "🌱  Route assez protégée"
                 : "💡 voir l'Alternative abritée";
         } 
@@ -316,10 +317,11 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
             // Cas 4 : L'alternative est MOINS BONNE (Gain négatif)
             // On utilise Math.abs() pour transformer le chiffre négatif (ex: -15) en positif (ex: 15)
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
+            dynamiqueRecommendation = currentView === "alternative" 
         }
 
         document.getElementById("windInfo").innerHTML = `
-            ${recommendation}
+           <strong>${dynamiqueRecommendation}</strong>
             <br>
             📍 Vue : Route ${currentView}
             <br>
