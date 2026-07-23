@@ -43,17 +43,17 @@ async function getAlternativeRoute(start, endLat, endLon) {
      alert(JSON.stringify(data.features[0].properties));
     return data; 
 }
-function extractSegments(feature){
-
+function extractSegments(routeObj){
     const forestSegments = new Set();
     const residentialSegments = new Set();
-alert("avant extra_info");
-    if(!feature.properties || !feature.properties.extra_info){
-        alert("pas dinfo sur cette route");
+
+    // Dans le format standard, l'API range les données directement dans routeObj.extras
+    if(!routeObj || !routeObj.extras) {
+       alert ("Pas d'extras disponibles sur cette route");
         return {forestSegments, residentialSegments};
     }
 
-    const extras = feature.properties.extra_info;
+    const extras = routeObj.extras;
  
      if(extras.waytype && extras.waytype.values){
         extras.waytype.values.forEach(v => {
@@ -233,22 +233,24 @@ async function getRoute(){
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
     
-    if (!allRoutesData.features || allRoutesData.features.length === 0) {
+  // AllRoutesData contient désormais un tableau nommé "routes"
+    if (!allRoutesData || !allRoutesData.routes || allRoutesData.routes.length === 0) {
         alert("Aucun itinéraire trouvé");
         return;
     }
 
-    const normalFeature = allRoutesData.features[0];
-    const coordsNormal = normalFeature.geometry.coordinates;
-    const latlngsNormal = coordsNormal.map(point => [point[1], point[0]]);
+    const normalRouteObj = allRoutesData.routes;
+    // Dans le format standard, les coordonnées sont déjà rangées dans l'ordre [Latitude, Longitude]
+    const coordsNormal = normalRouteObj.geometry.coordinates;
+    const latlngsNormal = coordsNormal.map(point => [point, point]);
 
     let latlngsAlternative = latlngsNormal; 
-    let alternativeFeature = normalFeature;
+    let alternativeRouteObj = normalRouteObj;
 
-    if (allRoutesData.features.length > 1) {
-        alternativeFeature = allRoutesData.features[1];
-        const coordsAlt = alternativeFeature.geometry.coordinates;
-        latlngsAlternative = coordsAlt.map(point => [point[1], point[0]]);
+    if (allRoutesData.routes.length > 1) {
+        alternativeRouteObj = allRoutesData.routes;
+        const coordsAlt = alternativeRouteObj.geometry.coordinates;
+        latlngsAlternative = coordsAlt.map(point => [point, point]);
         drawGrayRoute(latlngsAlternative);
     } else {
         console.log("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
@@ -263,8 +265,9 @@ async function getRoute(){
     
     drawWindRoute(latlngsNormal);
 
-    const normalScore = calculateWindScore(latlngsNormal, normalFeature);
-const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeature);
+// On remplace les anciens appels par ceux-ci :
+    const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
+    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
 
     const routesArrayMock = { duration: normalFeature.properties.summary.duration };
     const alternativeMock = { duration: alternativeFeature.properties.summary.duration };
@@ -294,7 +297,7 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
         let gainText = "";
         let dynamiqueRecommendation = "";
                
-        if (allRoutesData.features.length <= 1) {
+        if (allRoutesData.routes.length <= 1) {
             // Cas 1 : L'API n'a pas trouvé d'autre rue physique
             gainText = "🌬️ Aucune route alternative disponible";
             dynamiqueRecommendation = "🚴 Seul trajet trouvé";
@@ -346,7 +349,7 @@ const alternativeScore = calculateWindScore(latlngsAlternative, alternativeFeatu
 
     const toggleBtn = document.getElementById("toggleRouteBtn");
     
-    if (allRoutesData.features.length > 1) {
+    if (allRoutesData.routes.length > 1) {
         toggleBtn.style.display = "block";
         let showingAlternative = false;
         toggleBtn.innerText = "Voir la route alternative";
