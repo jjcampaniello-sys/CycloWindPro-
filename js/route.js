@@ -54,17 +54,7 @@ alert("avant extra_info");
     }
 
     const extras = feature.properties.extra_info;
-
-// ✅ DEBUG ICI
-const debugDiv = document.getElementById("debug");
-
-if (debugDiv) {
-    debugDiv.innerHTML = `
-        🌲 Segments forêt: ${forestSegments.size}<br>
-        🏠 Segments résidentiel: ${residentialSegments.size}
-    `;
-}
-    
+ 
     if(extras.waytype){
         extras.waytype.values.forEach(v => {
 
@@ -87,7 +77,15 @@ if (debugDiv) {
             }
         });
     }
+// ✅ DEBUG ICI
+const debugDiv = document.getElementById("debug");
 
+if (debugDiv) {
+    debugDiv.innerHTML = `
+        🌲 Segments forêt: ${forestSegments.size}<br>
+        🏠 Segments résidentiel: ${residentialSegments.size}
+    `;
+}
     return {forestSegments, residentialSegments};
 }
 function calculateWindScore(latlngs, feature){
