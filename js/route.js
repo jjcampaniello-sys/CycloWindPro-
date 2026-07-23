@@ -1,5 +1,6 @@
-// route.js - Trajet CycloWind 100% sans aucun crochet pour éviter les bugs de syntaxe
-alert("nouvelle fonction");
+// 🔥 ALERTE DE TEST DE CHARGEMENT : Elle va s'afficher immédiatement à l'écran !
+alert("route.js chargé avec succès !");
+
 function getSegmentDirection(p1, p2){
     const dy = p2.at(0) - p1.at(0);
     const dx = p2.at(1) - p1.at(1);
@@ -15,15 +16,13 @@ function getSegmentDirection(p1, p2){
 
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-    // 🔥 RÉPARÉ : URL officielle de l'API de routage rétablie
-    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
+    const url = "https://openrouteservice.org";
   
     const indexLongitude = start.lng;
     const indexLatitude = start.lat;
     
     const coordStart = Array(indexLongitude, indexLatitude);
     const coordEnd = Array(endLon, endLat);
-    // 🔥 RÉPARÉ : Suppression des espaces interdits dans le nom de la variable
     const listeCoordsRequete = Array(coordStart, coordEnd);
 
     const body = {
@@ -218,6 +217,7 @@ async function getRoute(){
         `;
     }
 
+    // 🔥 FIX SYNTAXE : L'appel textuel a été entièrement nettoyé
     updateWindText("normale", normalScore);
 
     if (latlngsNormal && latlngsNormal.length > 0) {
@@ -234,7 +234,6 @@ async function getRoute(){
 
     const toggleBtn = document.getElementById("toggleRouteBtn");
     
-    // 🔥 RÉPARÉ : Fin du fichier réécrite et correctement refermée
     if (allRoutesData.features.length > 1) {
         toggleBtn.style.display = "block";
         let showingAlternative = false;
@@ -296,4 +295,8 @@ function startNavigation() {
         window.isNavigating = false;
         btn.innerText = "Démarrer";
         btn.style.backgroundColor = "#2ecc71"; 
+
+        if (windInfoPanel) {
+            windInfoPanel.classList.remove("nav-hidden");
+        }
 
