@@ -25,7 +25,9 @@ async function getAlternativeRoute(start, endLat, endLon) {
             target_count: 3,    
             share_factor: 0.4,  
             weight_factor: 1.8  
-        }
+        },
+         // 🔥 AJOUT CRITIQUE : Demande officiellement à l'API de renvoyer le type de route et la surface
+        extra_info: ["roadattributes", "surface"]
     };
 
     const response = await fetch(url, {
