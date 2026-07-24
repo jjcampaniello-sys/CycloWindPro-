@@ -83,5 +83,34 @@ border:1px solid #ccc;">
 <!-- Routing -->
 <script src="js/route.js"></script>
 
+    <!-- Vos scripts de logique d'abord -->
+    <script src="winds.js"></script>
+    <script src="route.js"></script>
+
+    <!-- Script d'initialisation de l'application -->
+    <script>
+        // 1. Initialisation standard de votre carte Leaflet
+        window.map = L.map('map').setView([48.8566, 2.3522], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.map);
+
+        // ============================================================
+        // PLACEZ LES LIGNES DE SIMULATION EXACTEMENT ICI
+        // ============================================================
+        if (!window.userPosition || window.userPosition.length < 2) {
+            console.log("Mode simulation : Injection de coordonnées de test (Paris)");
+            window.userPosition = [48.8566, 2.3522]; // Paris Centre
+        }
+
+        if (!window.destination) {
+            window.destination = {
+                lat: 48.8925,
+                lon: 2.2359 // La Défense
+            };
+        }
+
+        // Lancement immédiat du calcul d'itinéraire avec nos fausses coordonnées
+        window.getRoute();
+        // ============================================================
+    </script>
 </body>
 </html>
