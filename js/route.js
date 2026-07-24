@@ -55,8 +55,8 @@ async function getAlternativeRoute(start, endLat, endLon) {
 }
 //================================================================================================================
 // Extraction des obstacles (Adaptée pour lire les segments de l'API standard)
+ alert("segment extract");
 function extractSegments(routeObj){
-   alert("segements extract);
     const forestSegments = new Set();
     const residentialSegments = new Set();
 // Sécurité : Si l'API n'a pas renvoyé le bloc d'obstacles du premier segment, on s'arrête proprement
@@ -106,6 +106,7 @@ function extractSegments(routeObj){
     return {forestSegments, residentialSegments};
 } 
 //===============================================================================================
+ alert("Calcul wind score");
 function calculateWindScore(latlngs, routeObj){
 
     // ✅ LIAISON SÉCURISÉE : On transmet le routeObj officiel à la fonction d'extraction précédente
@@ -140,7 +141,7 @@ else if (residentialSegments.has(i)) {
 
     return count > 0 ? totalCost / count : 0;
 }
-
+ alert("Choose Route");
 function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
     const normalTime = normalRoute.summary.duration;
     const alternativeTime = alternativeRoute.summary.duration;
@@ -153,7 +154,7 @@ function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternative
 
     return "normal";
 }
-
+ alert("Calcul wind gain");
 function calculateWindGain(scoreNormal, scoreAlternative){
     if(scoreNormal <= 0){
         return 0;
@@ -161,7 +162,7 @@ function calculateWindGain(scoreNormal, scoreAlternative){
     const gain = ((scoreNormal - scoreAlternative) / scoreNormal) * 100;
     return Math.max(0, gain);
 }
-
+ alert("Draw color route");
 function drawWindRoute(latlngs){
     for(let i = 0; i < latlngs.length - 1; i++){
         const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
@@ -185,7 +186,7 @@ function drawWindRoute(latlngs){
         routeLayers.push(line);
     }
 }
-
+ alert("draw gray route");
 function drawGrayRoute(latlngs){
     // ✅ PLUS BESOIN DE .map() : Le tableau est déjà prêt à 100% pour Leaflet
     const line = L.polyline(
@@ -204,6 +205,7 @@ function drawGrayRoute(latlngs){
 //===================================================================================================================
 // Calcul trajet principaux
 // Calcul trajet principaux (Première partie corrigée et unifiée)
+ alert("Definir destination");
 async function getRoute(){
     
     if(!window.userPosition){
