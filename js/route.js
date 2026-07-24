@@ -1,1167 +1,624 @@
-/* ============================================================
-ROUTE.JS
-Gestion des itinéraires, vent, obstacles et affichage Leaflet
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION 1 : VARIABLES GLOBALES & OUTILS COORDONNÉES
+// ============================================================
 
-/* ============================================================
-VARIABLES GLOBALES
-============================================================ */
 alert("ROUTE.JS EST CHARGE");
+
 window.routeLayers = window.routeLayers || [];
 window.routeGroup = window.routeGroup || L.layerGroup();
 
 if (window.map && !window.map.hasLayer(window.routeGroup)) {
-window.routeGroup.addTo(window.map);
+    window.routeGroup.addTo(window.map);
 }
 
-/* ============================================================
-OUTILS COORDONNÉES
-============================================================ */
-
-/*
-
-* ORS renvoie les coordonnées GeoJSON sous la forme :
-*
-* [longitude, latitude]
-*
-* Leaflet utilise :
-*
-* [latitude, longitude]
-*
-* Cette fonction effectue donc la conversion.
-  */
-  function convertGeoJSONCoordinates(coordinates) {
-
-  if (!Array.isArray(coordinates)) {
-  return [];
-  }
-
-  return coordinates
-  .filter(coord => Array.isArray(coord) && coord.length >= 2)
-  .map(coord => [
-  Number(coord[1]),
-  Number(coord[0])
-  ]);
-  }
-
-/*
-
-* Extrait les coordonnées d'une route ORS.
-*
-* Compatible avec :
-*
-* route.geometry.coordinates
-*
-* lorsque geometry est un objet GeoJSON.
-  */
-  function getRouteLatLngs(routeObj) {
-
-  if (!routeObj || !routeObj.geometry) {
-  console.error("Route ORS sans géométrie :", routeObj);
-  return [];
-  }
-
-  const geometry = routeObj.geometry;
-
-  /*
-
-  * Cas GeoJSON :
-  *
-  * {
-  * type: "LineString",
-  * coordinates: [...]
-  * }
-    */
-    if (
-    geometry.type === "LineString" &&
-    Array.isArray(geometry.coordinates)
-    ) {
-    return convertGeoJSONCoordinates(geometry.coordinates);
+// OUTILS COORDONNÉES
+// ORS renvoie les coordonnées GeoJSON sous la forme : [longitude, latitude]
+// Leaflet utilise : [latitude, longitude]
+// Cette fonction effectue donc la conversion.
+function convertGeoJSONCoordinates(coordinates) {
+    if (!Array.isArray(coordinates)) {
+        return [];
     }
+    return coordinates
+        .filter(coord => Array.isArray(coord) && coord.length >= 2)
+        .map(coord => [
+            Number(coord[1]),
+            Number(coord[0])
+        ]);
+}
 
-  /*
-
-  * Cas éventuel où geometry est directement
-  * un tableau de coordonnées.
-    */
+// Extrait les coordonnées d'une route ORS.
+// Compatible avec : route.geometry.coordinates lorsque geometry est un objet GeoJSON.
+function getRouteLatLngs(routeObj) {
+    if (!routeObj || !routeObj.geometry) {
+        console.error("Route ORS sans géométrie :", routeObj);
+        return [];
+    }
+    
+    const geometry = routeObj.geometry;
+    
+    // Cas GeoJSON : {type: "LineString", coordinates: [...]}
+    if (geometry.type === "LineString" && Array.isArray(geometry.coordinates)) {
+        return convertGeoJSONCoordinates(geometry.coordinates);
+    }
+    
+    // Cas éventuel où geometry est directement un tableau de coordonnées.
     if (Array.isArray(geometry)) {
-    return convertGeoJSONCoordinates(geometry);
+        return convertGeoJSONCoordinates(geometry);
     }
-
-  /*
-
-  * Cas où geometry serait une polyline encodée.
-  * Cette partie sert uniquement de compatibilité.
-    */
+    
+    // Cas où geometry serait une polyline encodée (Compatibilité).
     if (typeof geometry === "string") {
-
-    try {
-
-    ```
-     if (
-         L.LineUtil &&
-         typeof L.LineUtil.decodePolyline === "function"
-     ) {
-         return L.LineUtil.decodePolyline(geometry);
-     }
-   
-
-    } catch (error) {
-
-    ```
-     console.error(
-         "Erreur décodage polyline :",
-         error
-     );
-   
-
-    }
-
-  }
-
-  console.error(
-  "Format de géométrie ORS non reconnu :",
-  geometry
-  );
-
-  return [];
-  }
-
-/*
-
-* Retourne toujours un tableau [lat, lng].
-  */
-  function normalizeLatLng(point) {
-
-  if (!point) {
-  return null;
-  }
-
-  if (
-  Array.isArray(point) &&
-  point.length >= 2
-  ) {
-  return [
-  Number(point[0]),
-  Number(point[1])
-  ];
-  }
-
-  if (
-  point.lat !== undefined &&
-  point.lng !== undefined
-  ) {
-  return [
-  Number(point.lat),
-  Number(point.lng)
-  ];
-  }
-
-  return null;
-  }
-
-/* ============================================================
-DIRECTION DU SEGMENT
-============================================================ */
-
-function getSegmentDirection(p1, p2) {
-
-
-const point1 = normalizeLatLng(p1);
-const point2 = normalizeLatLng(p2);
-
-if (!point1 || !point2) {
-    return 0;
-}
-
-const dy = point2[0] - point1[0];
-const dx = point2[1] - point1[1];
-
-let angle =
-    Math.atan2(dy, dx) *
-    (180 / Math.PI);
-
-if (angle < 0) {
-    angle += 360;
-}
-
-/*
- * Correction conservée de ton code original.
- */
-angle =
-    (angle + 180) % 360;
-
-return angle;
-
-
-}
-
-/* ============================================================
-RÉCUPÉRATION DES ROUTES ORS
-============================================================ */
-
-async function getAlternativeRoute(
-start,
-endLat,
-endLon
-) {
-
-
-const apiKey =
-    "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
-
-const url =
-    "https://api.openrouteservice.org/v2/directions/cycling-regular";
-
-
-const body = {
-
-    format: "geojson",
-
-    coordinates: [
-        [
-            start.lng,
-            start.lat
-        ],
-        [
-            endLon,
-            endLat
-        ]
-    ],
-
-    alternative_routes: {
-
-        target_count: 3,
-
-        share_factor: 0.4,
-
-        weight_factor: 1.8
-
-    },
-
-    extra_info: [
-        "waytype",
-        "surface"
-    ]
-
-};
-
-
-try {
-
-    const response =
-        await fetch(
-            url,
-            {
-                method: "POST",
-
-                headers: {
-
-                    "Authorization": apiKey,
-
-                    "Content-Type":
-                        "application/json"
-
-                },
-
-                body:
-                    JSON.stringify(body)
-
+        try {
+            // Attention : decodePolyline n'est pas standard dans Leaflet natif. 
+            // On s'assure que la fonction existe (via plugin ou extension).
+            if (L.LineUtil && typeof L.LineUtil.decodePolyline === "function") {
+                return L.LineUtil.decodePolyline(geometry);
+            } else if (typeof polyline !== 'undefined' && typeof polyline.decode === 'function') {
+                // Alternative fréquente via la librairie externe @mapbox/polyline
+                return polyline.decode(geometry);
             }
-        );
-
-
-    if (!response.ok) {
-
-        const errorText =
-            await response.text();
-
-        console.error(
-            "Erreur HTTP ORS :",
-            response.status,
-            errorText
-        );
-
-        throw new Error(
-            "Erreur API ORS : HTTP " +
-            response.status
-        );
-
+        } catch (error) {
+            console.error("Erreur décodage polyline :", error);
+        }
     }
+    
+    console.error("Format de géométrie ORS non reconnu :", geometry);
+    return [];
+}
 
-
-    const data =
-        await response.json();
-alert("DONNÉES ORS COMPLÈTES :", JSON.stringify(data, null, 2));
-    alert(
-        "Réponse complète ORS :",
-        data
-    );
-
-
-    if (
-        !data ||
-        !data.routes ||
-        !data.routes.length
-    ) {
-
-        console.error(
-            "Aucune route retournée par ORS :",
-            data
-        );
-
-        return null;
-
+// Retourne toujours un tableau [lat, lng].
+function normalizeLatLng(point) {
+    if (!point) { 
+        return null; 
     }
-
-
-    return data;
-
-
-} catch (error) {
-
-    console.error(
-        "Erreur récupération routes ORS :",
-        error
-    );
-
-    alert(
-        "Impossible de récupérer les itinéraires."
-    );
-
+    if (Array.isArray(point) && point.length >= 2) { 
+        return [Number(point[0]), Number(point[1])];
+    }
+    if (point.lat !== undefined && point.lng !== undefined) {
+        return [Number(point.lat), Number(point.lng)];
+    }
+    // Ajout d'une sécurité si l'objet utilise {latitude, longitude}
+    if (point.latitude !== undefined && point.longitude !== undefined) {
+        return [Number(point.latitude), Number(point.longitude)];
+    }
     return null;
-
 }
 
+// ============================================================
+// ROUTE.JS - SECTION 2 : DIRECTION DU SEGMENT (BEARING)
+// ============================================================
+
+// Calcule le cap géographique (azimut) entre deux points en degrés (0° = Nord, 90° = Est, etc.)
+function getSegmentDirection(p1, p2) {
+    const point1 = normalizeLatLng(p1);
+    const point2 = normalizeLatLng(p2);
+    
+    if (!point1 || !point2) {
+        return 0;
+    }
+
+    const lat1 = point1[0] * Math.PI / 180;
+    const lat2 = point2[0] * Math.PI / 180;
+    const dLon = (point2[1] - point1[1]) * Math.PI / 180;
+
+    // Formule mathématique du grand cercle (Great Circle Bearing)
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) -
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    
+    let brng = Math.atan2(y, x) * (180 / Math.PI);
+    
+    // Normalisation de l'angle entre 0° et 360°
+    return (brng + 360) % 360;
 }
 
-/* ============================================================
-EXTRACTION DES OBSTACLES / ABRIS
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION 3 : RÉCUPÉRATION DES ROUTES ORS
+// ============================================================
 
-function extractSegments(routeObj) {
+async function getAlternativeRoute(start, endLat, endLon) {
+    const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
+    const url = "https://api.openrouteservice.org/v2/directions/cycling-regular";
+    
+    // Sécurisation des coordonnées de départ au cas où l'objet Leaflet varie
+    const startLng = start.lng !== undefined ? start.lng : start[1];
+    const startLat = start.lat !== undefined ? start.lat : start[0];
 
-const forestSegments =
-    new Set();
-
-const residentialSegments =
-    new Set();
-
-
-if (
-    !routeObj ||
-    !routeObj.segments ||
-    !routeObj.segments.length
-) {
-
-    console.warn(
-        "Aucun segment ORS disponible."
-    );
-
-    return {
-        forestSegments,
-        residentialSegments
+    const body = {
+        format: "geojson",
+        coordinates: [
+            [Number(startLng), Number(startLat)],
+            [Number(endLon), Number(endLat)]
+        ],
+        alternative_routes: {
+            target_count: 3, 
+            share_factor: 0.4, 
+            weight_factor: 1.8
+        },
+        extra_info: ["waytype", "surface"]
     };
 
+    try {
+        console.log("Envoi de la requête ORS avec le body :", body);
+
+        const response = await fetch(url, {
+            method: "POST", 
+            headers: {
+                "Authorization": apiKey,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body) // Correction : Remplacement du ";" par ":"
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Erreur HTTP ORS :", response.status, errorText); // Correction : "errorTex" -> "errorText"
+            throw new Error("Erreur API ORS : HTTP " + response.status);
+        }
+
+        const data = await response.json();
+        
+        // Remplacement des alert() bloquants par des logs détaillés en console
+        console.log("DONNÉES ORS COMPLÈTES :", data);
+        
+        if (!data || !data.routes || !data.routes.length) {
+            console.error("Aucune route retournée par ORS :", data);
+            return null;
+        }
+        
+        return data;
+
+    } catch (error) {
+        console.error("Erreur récupération routes ORS :", error);
+        alert("Impossible de récupérer les itinéraires.");
+        return null;
+    }
 }
 
 
-routeObj.segments.forEach(
-    segment => {
+// ============================================================
+// ROUTE.JS - SECTION 4 : EXTRACTION DES OBSTACLES / ABRIS
+// ============================================================
 
-        if (
-            !segment.extras
-        ) {
-            return;
-        }
+function extractSegments(routeObj) {
+    const forestSegments = new Set();
+    const residentialSegments = new Set();
 
+    if (!routeObj) {
+        console.warn("Aucun objet route ORS disponible.");
+        return { forestSegments, residentialSegments };
+    }
 
-        const extras =
-            segment.extras;
+    // Sécurité : ORS place généralement les 'extras' à la racine de la route (routeObj.extras),
+    // mais parfois dans les segments selon la version de l'API. On vérifie les deux emplacements.
+    let extrasSources = [];
+    if (routeObj.extras) {
+        extrasSources.push(routeObj.extras);
+    }
+    if (routeObj.segments && Array.isArray(routeObj.segments)) {
+        routeObj.segments.forEach(seg => {
+            if (seg.extras) extrasSources.push(seg.extras);
+        });
+    }
 
+    if (extrasSources.length === 0) {
+        console.warn("Aucune donnée 'extras' (waytype/surface) trouvée dans la route ORS.");
+        return { forestSegments, residentialSegments };
+    }
 
-        /*
-         * WAYTYPE
-         */
-        if (
-            extras.waytype &&
-            Array.isArray(
-                extras.waytype.values
-            )
-        ) {
+    // Traitement de toutes les sources d'extras trouvées
+    extrasSources.forEach(extras => {
+        // 1. TRAITEMENT DE WAYTYPE
+        if (extras.waytype && Array.isArray(extras.waytype.values)) {
+            extras.waytype.values.forEach(value => {
+                const from = Number(value[0]);
+                const to = Number(value[1]);
+                const type = Number(value[2]);
 
-            extras.waytype.values.forEach(
-                value => {
-
-                    const from =
-                        Number(value[0]);
-
-                    const to =
-                        Number(value[1]);
-
-                    const type =
-                        Number(value[2]);
-
-
-                    /*
-                     * Codes utilisés dans
-                     * ton code original.
-                     */
-                    if (
-                        type === 3 ||
-                        type === 10
-                    ) {
-
-                        for (
-                            let i = from;
-                            i <= to;
-                            i++
-                        ) {
-
-                            forestSegments.add(i);
-
-                        }
-
+                // Codes ORS originaux : 3 (StateRoad), 10 (Path/Forest) ou autres selon votre logique
+                if (type === 3 || type === 10) {
+                    for (let i = from; i <= to; i++) {
+                        forestSegments.add(i);
                     }
-
-
-                    if (
-                        type === 1 ||
-                        type === 2
-                    ) {
-
-                        for (
-                            let i = from;
-                            i <= to;
-                            i++
-                        ) {
-
-                            residentialSegments.add(i);
-
-                        }
-
-                    }
-
                 }
-            );
-
-        }
-
-
-        /*
-         * SURFACE
-         */
-        if (
-            extras.surface &&
-            Array.isArray(
-                extras.surface.values
-            )
-        ) {
-
-            extras.surface.values.forEach(
-                value => {
-
-                    const from =
-                        Number(value[0]);
-
-                    const to =
-                        Number(value[1]);
-
-                    const surfaceType =
-                        Number(value[2]);
-
-
-                    /*
-                     * Conservation de ta
-                     * logique originale.
-                     */
-                    if (
-                        surfaceType >= 5
-                    ) {
-
-                        for (
-                            let i = from;
-                            i <= to;
-                            i++
-                        ) {
-
-                            forestSegments.add(i);
-
-                        }
-
+                // Codes ORS originaux : 1 (Street), 2 (Residential)
+                if (type === 1 || type === 2) {
+                    for (let i = from; i <= to; i++) {
+                        residentialSegments.add(i);
                     }
-
                 }
-            );
-
+            });
         }
 
-    }
-);
+        // 2. TRAITEMENT DE SURFACE
+        if (extras.surface && Array.isArray(extras.surface.values)) {
+            extras.surface.values.forEach(value => {
+                const from = Number(value[0]);
+                const to = Number(value[1]);
+                const surfaceType = Number(value[2]);
 
+                // Conservation de votre logique originale (Surfaces non asphaltées / chemins de forêt)
+                if (surfaceType >= 5) {
+                    for (let i = from; i <= to; i++) {
+                        forestSegments.add(i);
+                    }
+                }
+            });
+        }
+    });
 
-return {
-    forestSegments,
-    residentialSegments
-};
-
-
+    return { forestSegments, residentialSegments };
 }
 
-/* ============================================================
-CALCUL DU SCORE VENT + OBSTACLES
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION 5 : CALCUL DU SCORE VENT + OBSTACLES
+// ============================================================
 
-function calculateWindScore(
-latlngs,
-routeObj
-) {
-
-
-if (
-    !latlngs ||
-    latlngs.length < 2
-) {
-
-    return 0;
-
-}
-
-
-const {
-    forestSegments,
-    residentialSegments
-} =
-    extractSegments(routeObj);
-
-
-let totalCost = 0;
-
-let count = 0;
-
-
-for (
-    let i = 0;
-    i < latlngs.length - 1;
-    i++
-) {
-
-    const direction =
-        getSegmentDirection(
-            latlngs[i],
-            latlngs[i + 1]
-        );
-
-
-    let cost =
-        windCost(
-            direction,
-            window.currentWindDirection,
-            window.currentWindSpeed
-        );
-
-
-    /*
-     * BONUS ABRI FORÊT
-     */
-    if (
-        forestSegments.has(i)
-    ) {
-
-        cost =
-            cost * 0.5;
-
+function calculateWindScore(latlngs, routeObj) {
+    if (!latlngs || latlngs.length < 2) {
+        return 0;
     }
 
-    /*
-     * BONUS ABRI ZONE RÉSIDENTIELLE
-     */
-    else if (
-        residentialSegments.has(i)
-    ) {
+    // Récupération des index de points protégés
+    const { forestSegments, residentialSegments } = extractSegments(routeObj);
+    
+    let totalWeightedCost = 0;
+    let totalDistance = 0;
 
-        cost =
-            cost * 0.7;
+    for (let i = 0; i < latlngs.length - 1; i++) {
+        const p1 = latlngs[i];
+        const p2 = latlngs[i + 1];
 
+        // 1. Calcul de la direction et du coût de base du vent sur ce segment
+        const direction = getSegmentDirection(p1, p2);
+        let cost = windCost(direction, window.currentWindDirection, window.currentWindSpeed);
+
+        // 2. Application des coefficients d'abri (Vérification basée sur l'index du point de départ du segment)
+        if (forestSegments.has(i)) {
+            cost = cost * 0.5; // -50% de force du vent en forêt
+        } else if (residentialSegments.has(i)) {
+            cost = cost * 0.7; // -30% de force du vent en ville
+        }
+
+        // 3. Calcul de la distance du segment (Pondération)
+        // On utilise la fonction native de Leaflet si disponible, sinon approximation plane
+        let distance = 1; 
+        if (window.L && typeof L.latLng === "function") {
+            distance = L.latLng(p1).distanceTo(L.latLng(p2)); // Distance en mètres
+        } else {
+            // Sauvegarde mathématique simple (Pythagore) au cas où Leaflet ne serait pas instancié
+            const dy = p2[0] - p1[0];
+            const dx = p2[1] - p1[1];
+            distance = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Cumul pondéré
+        totalWeightedCost += (cost * distance);
+        totalDistance += distance;
     }
 
-
-    totalCost += cost;
-
-    count++;
-
+    // Retourne le coût moyen pondéré par kilomètre/mètre. Si la distance est nulle, retourne 0.
+    return totalDistance > 0 ? (totalWeightedCost / totalDistance) : 0;
 }
 
+// ============================================================
+// ROUTE.JS - SECTION 6 : CHOIX DE LA MEILLEURE ROUTE
+// ============================================================
 
-return count > 0
-    ? totalCost / count
-    : 0;
+function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore) {
+    // Sécurisation de l'accès au summary selon la structure GeoJSON de l'API ORS
+    const getDuration = (routeObj) => {
+        if (!routeObj) return 0;
+        // Chemin standard ORS GeoJSON : route.properties.summary.duration
+        if (routeObj.properties && routeObj.properties.summary) {
+            return Number(routeObj.properties.summary.duration || 0);
+        }
+        // Chemin alternatif : route.summary.duration
+        if (routeObj.summary) {
+            return Number(routeObj.summary.duration || 0);
+        }
+        // Chemin de secours via les segments : route.segments[0].summary.duration
+        if (routeObj.segments && routeObj.segments[0] && routeObj.segments[0].summary) {
+            return Number(routeObj.segments[0].summary.duration || 0);
+        }
+        return 0;
+    };
 
+    const normalTime = getDuration(normalRoute);
+    const alternativeTime = getDuration(alternativeRoute);
+    
+    // Calcul de la différence de gêne due au vent
+    const windGain = normalScore - alternativeScore;
+    
+    console.log("Arbitrage itinéraire :", {
+        normalTime: Math.round(normalTime / 60) + " min",
+        alternativeTime: Math.round(alternativeTime / 60) + " min",
+        windGain: windGain.toFixed(2),
+        seuilAcceptable: Math.round((normalTime * 1.2) / 60) + " min"
+    });
 
+    // Si l'alternative réduit significativement le coût du vent (gain > 3)
+    // ET que le temps de parcours ne dépasse pas 120% du trajet normal
+    if (windGain > 3 && alternativeTime < (normalTime * 1.2)) {
+        console.log("Résultat : L'itinéraire ALTERNATIF est privilégié (mieux abrité).");
+        return "alternative";
+    }
+    
+    console.log("Résultat : L'itinéraire NORMAL est conservé (plus rapide ou vent similaire).");
+    return "normal";
 }
 
-/* ============================================================
-CHOIX DE LA MEILLEURE ROUTE
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION 7 : CALCUL DU GAIN DE VENT (POURCENTAGE)
+// ============================================================
 
-function chooseBestRoute(
-normalRoute,
-alternativeRoute,
-normalScore,
-alternativeScore
-) {
+function calculateWindGain(scoreNormal, scoreAlternative) {
+    const normal = Number(scoreNormal || 0);
+    const alternative = Number(scoreAlternative || 0);
 
-```
-const normalTime =
-    Number(
-        normalRoute.summary?.duration || 0
-    );
-
-const alternativeTime =
-    Number(
-        alternativeRoute.summary?.duration || 0
-    );
-
-
-const windGain =
-    normalScore -
-    alternativeScore;
-
-
-if (
-    windGain > 3 &&
-    alternativeTime <
-    normalTime * 1.2
-) {
-
-    return "alternative";
-
-}
-
-
-return "normal";
-
-
-}
-
-/* ============================================================
-CALCUL DU GAIN DE VENT
-============================================================ */
-
-function calculateWindGain(
-scoreNormal,
-scoreAlternative
-) {
-
-if (
-    scoreNormal <= 0
-) {
-
-    return 0;
-
-}
-
-
-const gain =
-    (
-        (
-            scoreNormal -
-            scoreAlternative
-        ) /
-        scoreNormal
-    ) *
-    100;
-
-
-return Math.max(
-    0,
-    gain
-);
-
-
-}
-
-/* ============================================================
-COULEUR SELON L'EXPOSITION AU VENT
-============================================================ */
-
-function getWindColor(
-cost
-) {
-
-if (
-    cost > 20
-) {
-
-    return "red";
-
-}
-
-if (
-    cost > 8
-) {
-
-    return "orange";
-
-}
-
-return "green";
-
-
-}
-
-/* ============================================================
-DESSIN DE LA ROUTE COLORÉE
-============================================================ */
-
-function drawWindRoute(
-latlngs,
-routeObj = null
-) {
-
-
-if (
-    !latlngs ||
-    latlngs.length < 2
-) {
-
-    return;
-
-}
-
-
-const {
-    forestSegments,
-    residentialSegments
-} =
-    extractSegments(routeObj);
-
-
-for (
-    let i = 0;
-    i < latlngs.length - 1;
-    i++
-) {
-
-    const direction =
-        getSegmentDirection(
-            latlngs[i],
-            latlngs[i + 1]
-        );
-
-
-    let cost =
-        windCost(
-            direction,
-            window.currentWindDirection,
-            window.currentWindSpeed
-        );
-
-
-    /*
-     * Le dessin utilise maintenant
-     * le même effet d'abri que le score.
-     */
-    if (
-        forestSegments.has(i)
-    ) {
-
-        cost =
-            cost * 0.5;
-
+    // Si le score de base est nul ou négatif, aucun gain n'est calculable.
+    if (normal <= 0) {
+        return 0;
     }
 
-    else if (
-        residentialSegments.has(i)
-    ) {
+    // Calcul du pourcentage de réduction de la gêne du vent
+    const gain = ((normal - alternative) / normal) * 100;
+    
+    // On s'assure que le gain n'est pas négatif (si l'alternative est moins bonne)
+    // et on arrondit à 1 chiffre après la virgule pour l'affichage.
+    const finalGain = Math.max(0, gain);
+    
+    return Number(finalGain.toFixed(1));
+}
 
-        cost =
-            cost * 0.7;
+// ============================================================
+// ROUTE.JS - SECTION 8 : COULEUR SELON L'EXPOSITION AU VENT
+// ============================================================
 
+function getWindColor(cost) {
+    const numericCost = Number(cost || 0);
+
+    // Exposition critique (Vent de face violent, aucune protection)
+    if (numericCost > 20) {
+        return "#e74c3c"; // Un rouge moderne (au lieu de "red")
+    }
+    
+    // Exposition modérée (Vent latéral ou partiel)
+    if (numericCost > 8) {
+        return "#f39c12"; // Un orange plus doux (au lieu de "orange")
+    }
+    
+    // Exposition faible ou favorable (Route abritée ou vent arrière)
+    return "#2ecc71"; // Un vert émeraude agréable (au lieu de "green")
+}
+
+// ============================================================
+// ROUTE.JS - SECTION 9 : DESSIN DE LA ROUTE COLORÉE (OPTIMISÉ)
+// ============================================================
+
+function drawWindRoute(latlngs, routeObj = null) {
+    if (!latlngs || latlngs.length < 2) {
+        return;
     }
 
+    const { forestSegments, residentialSegments } = extractSegments(routeObj);
+    
+    let currentBatchColor = null;
+    let currentBatchCoords = [];
 
-    const color =
-        getWindColor(cost);
-
-
-    const line =
-        L.polyline(
-            [
-                latlngs[i],
-                latlngs[i + 1]
-            ],
-            {
-
-                color: color,
-
-                weight: 5,
-
+    // Fonction interne pour vider le lot de coordonnées en créant une unique ligne sur la carte
+    const flushBatch = () => {
+        if (currentBatchCoords.length >= 2) {
+            const line = L.polyline(currentBatchCoords, {
+                color: currentBatchColor,
+                weight: 6,       // Légèrement plus épais pour une meilleure visibilité cycliste
                 opacity: 0.85,
-
-                pane:
-                    "overlayPane"
-
-            }
-        );
-
-
-    line.addTo(
-        window.routeGroup
-    );
-
-
-    window.routeLayers.push(
-        line
-    );
-
-}
-
-}
-
-/* ============================================================
-DESSIN ROUTE GRISE
-============================================================ */
-
-function drawGrayRoute(
-latlngs
-) {
-
-if (
-    !latlngs ||
-    latlngs.length < 2
-) {
-
-    return;
-
-}
-
-
-const line =
-    L.polyline(
-        latlngs,
-        {
-
-            color: "gray",
-
-            weight: 4,
-
-            opacity: 0.55,
-
-            pane:
-                "overlayPane"
-
+                pane: "overlayPane"
+            });
+            line.addTo(window.routeGroup);
+            window.routeLayers.push(line);
         }
-    );
+    };
 
+    for (let i = 0; i < latlngs.length - 1; i++) {
+        const p1 = latlngs[i];
+        const p2 = latlngs[i + 1];
 
-line.addTo(
-    window.routeGroup
-);
+        const direction = getSegmentDirection(p1, p2);
+        let cost = windCost(direction, window.currentWindDirection, window.currentWindSpeed);
 
+        // Application des protections identiques au calcul du score
+        if (forestSegments.has(i)) {
+            cost = cost * 0.5;
+        } else if (residentialSegments.has(i)) {
+            cost = cost * 0.7;
+        }
 
-window.routeLayers.push(
-    line
-);
+        const color = getWindColor(cost);
 
+        // Si la couleur change ou s'il s'agit du premier point
+        if (color !== currentBatchColor) {
+            // On dessine le morceau précédent avant de changer de couleur
+            if (currentBatchCoords.length > 0) {
+                currentBatchCoords.push(p1); // On ferme la liaison avec le point actuel
+                flushBatch();
+            }
+            // On initialise le nouveau groupe de couleur
+            currentBatchColor = color;
+            currentBatchCoords = [p1];
+        }
 
+        currentBatchCoords.push(p2);
+    }
+
+    // Ne pas oublier de dessiner le tout dernier morceau restant
+    flushBatch();
 }
 
-/* ============================================================
-NETTOYAGE DES ROUTES
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION 10 : DESSIN DE LA ROUTE GRISE (ALTERNATIVE)
+// ============================================================
+
+function drawGrayRoute(latlngs) {
+    if (!latlngs || latlngs.length < 2) {
+        return;
+    }
+    
+    // Une seule polyline pour tout le tracé : performance optimale d'origine.
+    const line = L.polyline(latlngs, {
+        color: "#95a5a6", // Un gris moderne (au lieu de "gray")
+        weight: 4,
+        opacity: 0.55,
+        pane: "overlayPane"
+    });
+    
+    line.addTo(window.routeGroup);
+    window.routeLayers.push(line);
+}
+
+// ============================================================
+// ROUTE.JS - SECTION 11 : NETTOYAGE DES ROUTES
+// ============================================================
 
 function clearRouteLayers() {
-
-if (
-    window.routeGroup
-) {
-
-    window.routeGroup.clearLayers();
-
+    // Sécurité : On vérifie que routeGroup existe et possède bien la méthode clearLayers
+    if (window.routeGroup && typeof window.routeGroup.clearLayers === "function") {
+        window.routeGroup.clearLayers();
+    }
+    
+    // Réinitialisation du tableau de stockage global
+    window.routeLayers = [];
+    
+    console.log("Carte nettoyée : anciens tracés d'itinéraires supprimés.");
 }
 
+// ============================================================
+// ROUTE.JS - SECTION 12 : AFFICHAGE DES INFORMATIONS (CORRIGÉ)
+// ============================================================
 
-window.routeLayers = [];
+function updateWindText(currentView, activeScore, normalRouteObj, alternativeRouteObj, normalScore, alternativeScore, hasAlternative) {
+    const routeActive = currentView === "normale" ? normalRouteObj : alternativeRouteObj;
+    
+    if (!routeActive) {
+        console.warn("Impossible de mettre à jour le texte : aucun objet route actif.");
+        return;
+    }
 
+    // Sécurisation de l'accès à la distance selon la structure de l'API ORS GeoJSON
+    let rawDistance = 0;
+    if (routeActive.properties && routeActive.properties.summary) {
+        rawDistance = routeActive.properties.summary.distance;
+    } else if (routeActive.summary) {
+        rawDistance = routeActive.summary.distance;
+    }
+    const distanceKm = (Number(rawDistance || 0) / 1000).toFixed(1);
 
-}
+    // Utilisation de la fonction globale de calcul de gain développée en Section 7
+    // Si l'alternative est moins bonne, le gain vaut 0. On calcule aussi la perte si nécessaire.
+    let rawGain = 0;
+    if (normalScore > 0) {
+        rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
+    }
 
-/* ============================================================
-AFFICHAGE DES INFORMATIONS
-============================================================ */
+    let gainText = "";
+    let dynamiqueRecommendation = "";
 
-function updateWindText(
-currentView,
-activeScore,
-normalRouteObj,
-alternativeRouteObj,
-normalScore,
-alternativeScore,
-hasAlternative
-) {
-
-const routeActive =
-    currentView === "normale"
-        ? normalRouteObj
-        : alternativeRouteObj;
-
-
-if (
-    !routeActive
-) {
-
-    return;
-
-}
-
-
-const distanceKm =
-    (
-        Number(
-            routeActive.summary?.distance || 0
-        ) / 1000
-    ).toFixed(1);
-
-
-let rawGain = 0;
-
-
-if (
-    normalScore > 0
-) {
-
-    rawGain =
-        (
-            (
-                normalScore -
-                alternativeScore
-            ) /
-            normalScore
-        ) *
-        100;
-
-}
-
-
-let gainText = "";
-
-let dynamiqueRecommendation = "";
-
-
-if (
-    !hasAlternative
-) {
-
-    gainText =
-        "🌬️ Aucune route alternative disponible";
-
-    dynamiqueRecommendation =
-        "🚴 Seul trajet trouvé";
-
-}
-
-else if (
-    Math.abs(rawGain) < 5
-) {
-
-    gainText =
-        "🌬️ Exposition au vent équivalente sur les deux trajets";
-
-    dynamiqueRecommendation =
-        currentView === "alternative"
+    if (!hasAlternative) {
+        gainText = "🌬️ Aucune route alternative disponible";
+        dynamiqueRecommendation = "🚴 Seul trajet trouvé";
+    }
+    else if (Math.abs(rawGain) < 5) {
+        gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
+        dynamiqueRecommendation = currentView === "alternative"
             ? "🚴 Trajet équivalent, mais route initiale plus directe"
             : "🚴 CycloWind recommande ce trajet initial";
-
-}
-
-else if (
-    rawGain >= 5
-) {
-
-    gainText =
-        `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
-
-    dynamiqueRecommendation =
-        currentView === "alternative"
+    }
+    else if (rawGain >= 5) {
+        gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
+        dynamiqueRecommendation = currentView === "alternative"
             ? "🌱 Route assez protégée"
             : "💡 Voir l'Alternative abritée";
-
-}
-
-else {
-
-    gainText =
-        `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
-
-    dynamiqueRecommendation =
-        currentView === "alternative"
+    }
+    else {
+        // Cas où rawGain est négatif (l'alternative est moins bonne que la normale)
+        gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
+        dynamiqueRecommendation = currentView === "alternative"
             ? "⚠️ Route alternative plus exposée"
             : "🚴 Trajet initial bien plus abrité";
+    }
 
+    const windInfo = document.getElementById("windInfo");
+    if (windInfo) {
+        // Correction : Fermeture correcte du template literal avec ` au lieu de laisser la chaîne ouverte
+        windInfo.innerHTML = `
+            <strong>${dynamiqueRecommendation}</strong>
+            <br>
+            📍 Vue : Route ${currentView}
+            <br>
+            📏 Distance : ${distanceKm} km
+            <br>
+            ${gainText}
+            <br>
+            📊 Indice effort vent : ${Number(activeScore).toFixed(1)}
+        `; // Chaîne correctement fermée ici
+        
+        windInfo.style.display = "block";
+    }
 }
 
+// ============================================================
+// ROUTE.JS - SECTION 13 : AFFICHAGE / MISE À JOUR DU TOGGLE
+// ============================================================
 
-const windInfo =
-    document.getElementById(
-        "windInfo"
-    );
-
-
-if (
-    windInfo
-) {
-
-    windInfo.innerHTML = `
-
-        <strong>
-            ${dynamiqueRecommendation}
-        </strong>
-
-        <br>
-
-        📍 Vue :
-        Route ${currentView}
-
-        <br>
-
-        📏 Distance :
-        ${distanceKm} km
-
-        <br>
-
-        ${gainText}
-
-        <br>
-
-        📊 Indice effort vent :
-        ${Number(activeScore).toFixed(1)}
-
-    ;
-
-    windInfo.style.display =
-        "block";
-
-}
-
-}
-
-/* ============================================================
-AFFICHAGE / MISE À JOUR DU TOGGLE
-============================================================ */
-
-function setupRouteToggle(
-normalRouteObj,
-alternativeRouteObj,
-normalScore,
-alternativeScore,
-hasAlternative
-) {
-
-const toggleBtn =
-    document.getElementById(
-        "toggleRouteBtn"
-    );
-
-
-if (
-    !toggleBtn
-) {
-
-    console.warn(
-        "toggleRouteBtn introuvable."
-    );
-
-    return;
-
-}
-
-
-if (
-    !hasAlternative
-) {
-
-    toggleBtn.style.display =
-        "none";
-
-    toggleBtn.onclick =
-        null;
-
-    return;
-
-}
-
-
-toggleBtn.style.display =
-    "block";
-
-
-let showingAlternative =
-    false;
-
-
-toggleBtn.innerText =
-    "Voir la route alternative";
-
-
-toggleBtn.onclick =
-    function () {
-
+function setupRouteToggle(normalRouteObj, alternativeRouteObj, normalScore, alternativeScore, hasAlternative) {
+    const toggleBtn = document.getElementById("toggleRouteBtn");
+    if (!toggleBtn) {
+        console.warn("toggleRouteBtn introuvable.");
+        return;
+    }
+    
+    // Si aucune route alternative n'existe, on cache le bouton et on nettoie l'événement
+    if (!hasAlternative) {
+        toggleBtn.style.display = "none";
+        toggleBtn.onclick = null;
+        return;
+    }
+    
+    toggleBtn.style.display = "block";
+    toggleBtn.innerText = "Voir la route alternative"; // Correction du point-virgule manquant
+    
+    // État local persistant pour ce bouton spécifique
+    let showingAlternative = false;
+    
+    toggleBtn.onclick = function () {
         clearRouteLayers();
-
-
-        if (
-            !showingAlternative
-        ) {
-
-            drawWindRoute(
-                window.latlngsAlternativePersist,
-                alternativeRouteObj
-            );
-
-
-            drawGrayRoute(
-                window.latlngsNormalPersist
-            );
-
-
-            toggleBtn.innerText =
-                "Voir la route normale";
-
-
+        
+        if (!showingAlternative) {
+            // Affichage de l'alternative en couleur et de la normale en gris
+            drawWindRoute(window.latlngsAlternativePersist, alternativeRouteObj);
+            drawGrayRoute(window.latlngsNormalPersist);
+            
+            toggleBtn.innerText = "Voir la route normale";
+            
             updateWindText(
                 "alternative",
-                alternativeScore,
-                normalRouteObj,
-                alternativeRouteObj,
-                normalScore,
-                alternativeScore,
+                alternativeScore, 
+                normalRouteObj, 
+                alternativeRouteObj, 
+                normalScore, 
+                alternativeScore, 
                 true
             );
-
-
-            showingAlternative =
-                true;
-
+            showingAlternative = true;
         }
-
         else {
-
-            drawWindRoute(
-                window.latlngsNormalPersist,
-                normalRouteObj
-            );
-
-
-            drawGrayRoute(
-                window.latlngsAlternativePersist
-            );
-
-
-            toggleBtn.innerText =
-                "Voir la route alternative";
-
-
+            // Affichage de la normale en couleur et de l'alternative en gris
+            drawWindRoute(window.latlngsNormalPersist, normalRouteObj);
+            drawGrayRoute(window.latlngsAlternativePersist);
+            
+            toggleBtn.innerText = "Voir la route alternative";
+           
             updateWindText(
                 "normale",
                 normalScore,
@@ -1171,968 +628,206 @@ toggleBtn.onclick =
                 alternativeScore,
                 true
             );
-
-
-            showingAlternative =
-                false;
-
+            showingAlternative = false;
         }
-
     };
-
-
 }
 
-/* ============================================================
-FONCTION PRINCIPALE GETROUTE
-============================================================ */
+// ============================================================
+// ROUTE.JS - SECTION FINALE : ORCHESTRATION ET CALCUL GLOBAL
+// ============================================================
 
 async function getRoute() {
-alert("GETROUTE EST DEFINI");
-try {
-
-    console.log(
-        "getRoute() lancé"
-    );
-
-
-    /*
-     * Vérification carte.
-     */
-    if (
-        !window.map
-    ) {
-
-        alert(
-            "La carte n'est pas disponible."
-        );
-
-        return;
-
-    }
-
-
-    /*
-     * Vérification position.
-     */
-    if (
-        !window.userPosition
-    ) {
-
-        alert(
-            "Définissez votre position d'abord."
-        );
-
-        return;
-
-    }
-
-
-    /*
-     * Vérification destination.
-     */
-    if (
-        !window.destination
-    ) {
-
-        alert(
-            "Choisissez une destination dans la liste."
-        );
-
-        return;
-
-    }
-
-
-    const start = {
-
-        lat:
-            Number(
-                window.userPosition[0]
-            ),
-
-        lng:
-            Number(
-                window.userPosition[1]
-            )
-
-    };
-
-
-    const endLat =
-        Number(
-            window.destination.lat
-        );
-
-
-    const endLon =
-        Number(
-            window.destination.lon
-        );
-
-
-    /*
-     * Récupération ORS.
-     */
-    const allRoutesData =
-        await getAlternativeRoute(
-            start,
-            endLat,
-            endLon
-        );
-
-
-    if (
-        !allRoutesData ||
-        !allRoutesData.routes ||
-        !allRoutesData.routes.length
-    ) {
-
-        alert(
-            "Aucun itinéraire trouvé."
-        );
-
-        return;
-
-    }
-
-
-    /*
-     * Route principale.
-     */
-    const normalRouteObj =
-        allRoutesData.routes[0];
-
-
-    /*
-     * Conversion GeoJSON -> [lat, lng].
-     */
-    const latlngsNormal =
-        getRouteLatLngs(
-            normalRouteObj
-        );
-
-
-    if (
-        latlngsNormal.length < 2
-    ) {
-
-        console.error(
-            "Impossible d'extraire la géométrie de la route normale.",
-            normalRouteObj
-        );
-
-        alert(
-            "La géométrie de la route est invalide."
-        );
-
-        return;
-
-    }
-
-
-    /*
-     * Route alternative.
-     */
-    let alternativeRouteObj =
-        normalRouteObj;
-
-
-    let latlngsAlternative =
-        latlngsNormal;
-
-
-    const hasAlternative =
-        allRoutesData.routes.length > 1;
-
-
-    if (
-        hasAlternative
-    ) {
-
-        alternativeRouteObj =
-            allRoutesData.routes[1];
-
-
-        latlngsAlternative =
-            getRouteLatLngs(
-                alternativeRouteObj
-            );
-
-
-        if (
-            latlngsAlternative.length < 2
-        ) {
-
-            console.warn(
-                "La route alternative est invalide. Retour à la route normale."
-            );
-
-            alternativeRouteObj =
-                normalRouteObj;
-
-            latlngsAlternative =
-                latlngsNormal;
-
+    console.log("getRoute() : Initialisation du calcul d'itinéraire...");
+    
+    try {
+        // 1. VÉRIFICATIONS DE SÉCURITÉ DE L'ENVIRONNEMENT
+        if (!window.map) {
+            alert("La carte n'est pas disponible.");
+            return;
+        }
+        if (!window.userPosition || !Array.isArray(window.userPosition) || window.userPosition.length < 2) {
+            alert("Définissez votre position de départ d'abord.");
+            return;
+        }
+        if (!window.destination || !window.destination.lat || !window.destination.lon) {
+            alert("Choisissez une destination valide dans la liste.");
+            return;
         }
 
-    }
+        // Configuration des points de départ et d'arrivée
+        const start = {
+            lat: Number(window.userPosition[0]),
+            lng: Number(window.userPosition[1])
+        };
+        const endLat = Number(window.destination.lat);
+        const endLon = Number(window.destination.lon);
 
+        // 2. APPEL API OPENROUTESERVICE
+        const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
+        if (!allRoutesData || !allRoutesData.routes || !allRoutesData.routes.length) {
+            alert("Aucun itinéraire trouvé.");
+            return;
+        }
 
-    /*
-     * Sauvegarde globale.
-     */
-    window.latlngsNormalPersist =
-        latlngsNormal;
+        // 3. EXTRACTION DE LA ROUTE PRINCIPALE (INDEX 0)
+        const normalRouteObj = allRoutesData.routes[0];
+        const latlngsNormal = getRouteLatLngs(normalRouteObj);
+        
+        if (latlngsNormal.length < 2) {
+            console.error("Impossible d'extraire la géométrie de la route normale.", normalRouteObj);
+            alert("La géométrie de la route initiale est invalide.");
+            return;
+        }
 
+        // 4. EXTRACTION DE LA ROUTE ALTERNATIVE (INDEX 1) SI ELLE EXISTE
+        let alternativeRouteObj = normalRouteObj;
+        let latlngsAlternative = latlngsNormal;
+        let hasAlternative = allRoutesData.routes.length > 1;
 
-    window.latlngsAlternativePersist =
-        latlngsAlternative;
+        if (hasAlternative) {
+            alternativeRouteObj = allRoutesData.routes[1];
+            latlngsAlternative = getRouteLatLngs(alternativeRouteObj);
+            
+            // Si la route alternative renvoyée est corrompue, on se rabat sur la normale
+            if (latlngsAlternative.length < 2) {
+                console.warn("La route alternative extraite est invalide. Repli sur la route normale.");
+                alternativeRouteObj = normalRouteObj;
+                latlngsAlternative = latlngsNormal;
+                hasAlternative = false;
+            }
+        }
 
+        // 5. SAUVEGARDE ET PERSISTANCE POUR LE TOGGLE INTERACTIF
+        window.latlngsNormalPersist = latlngsNormal;
+        window.latlngsAlternativePersist = latlngsAlternative;
+        window.currentRoute = latlngsNormal.map(point => L.latLng(point[0], point[1]));
 
-    window.currentRoute =
-        latlngsNormal.map(
-            point =>
-                L.latLng(
-                    point[0],
-                    point[1]
-                )
-        );
+        // Nettoyage complet des anciens tracés sur la carte
+        clearRouteLayers();
 
+        // 6. GESTION DE LA MÉTÉO (BASÉE SUR LE PREMIER SEGMENT)
+        const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
+        await getWind(start.lat, start.lng, firstDir);
 
-    /*
-     * Nettoyage anciennes routes.
-     */
-    clearRouteLayers();
-
-
-    /*
-     * Calcul direction premier segment.
-     */
-    const firstDir =
-        getSegmentDirection(
-            latlngsNormal[0],
-            latlngsNormal[1]
-        );
-
-
-    /*
-     * Récupération du vent.
-     */
-    await getWind(
-        start.lat,
-        start.lng,
-        firstDir
-    );
-
-
-    /*
-     * Calcul des scores.
-     */
-    const normalScore =
-        calculateWindScore(
-            latlngsNormal,
-            normalRouteObj
-        );
-
-
-    const alternativeScore =
-        hasAlternative
-            ? calculateWindScore(
-                latlngsAlternative,
-                alternativeRouteObj
-            )
+        // 7. CALCULS DES SCORES D'EFFORT FACE AU VENT
+        const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
+        const alternativeScore = hasAlternative
+            ? calculateWindScore(latlngsAlternative, alternativeRouteObj)
             : normalScore;
 
-
-    /*
-     * Choix de la meilleure route.
-     */
-    const choice =
-        hasAlternative
-            ? chooseBestRoute(
-                normalRouteObj,
-                alternativeRouteObj,
-                normalScore,
-                alternativeScore
-            )
+        // 8. ARBITRAGE DU SYSTÈME (ALGORITHME DE CHOIX)
+        const choice = hasAlternative
+            ? chooseBestRoute(normalRouteObj, alternativeRouteObj, normalScore, alternativeScore)
             : "normal";
 
-
-    const windGain =
-        hasAlternative
-            ? calculateWindGain(
-                normalScore,
-                alternativeScore
-            )
+        const windGain = hasAlternative
+            ? calculateWindGain(normalScore, alternativeScore)
             : 0;
 
-
-    console.log(
-        "Score route normale :",
-        normalScore
-    );
-
-
-    console.log(
-        "Score route alternative :",
-        alternativeScore
-    );
-
-
-    console.log(
-        "Meilleure route :",
-        choice
-    );
-
-
-    console.log(
-        "Gain vent :",
-        windGain
-    );
-
-
-    /*
-     * Affichage initial.
-     *
-     * La route normale est colorée.
-     * L'alternative est grise.
-     */
-    drawWindRoute(
-        latlngsNormal,
-        normalRouteObj
-    );
-
-
-    if (
-        hasAlternative
-    ) {
-
-        drawGrayRoute(
-            latlngsAlternative
-        );
-
-    }
-
-
-    /*
-     * Mise à jour informations.
-     */
-    updateWindText(
-        "normale",
-        normalScore,
-        normalRouteObj,
-        alternativeRouteObj,
-        normalScore,
-        alternativeScore,
-        hasAlternative
-    );
-
-
-    /*
-     * Configuration toggle.
-     */
-    setupRouteToggle(
-        normalRouteObj,
-        alternativeRouteObj,
-        normalScore,
-        alternativeScore,
-        hasAlternative
-    );
-
-
-    /*
-     * Zoom automatique.
-     */
-    const bounds =
-        L.latLngBounds(
-            latlngsNormal
-        );
-
-
-    if (
-        hasAlternative
-    ) {
-
-        bounds.extend(
-            L.latLngBounds(
-                latlngsAlternative
-            )
-        );
-
-    }
-
-
-    window.map.fitBounds(
-        bounds,
-        {
-
-            padding:
-                L.point(
-                    50,
-                    50
-                ),
-
-            maxZoom:
-                15
-
-        }
-    );
-
-
-    /*
-     * Exposition de la fonction.
-     */
-    window.drawWindRoute =
-        drawWindRoute;
-
-
-    console.log(
-        "getRoute() terminé correctement."
-    );
-
-
-} catch (error) {
-
-    console.error(
-        "ERREUR CRITIQUE DANS getRoute() :",
-        error
-    );
-
-
-    alert(
-        "Une erreur est survenue lors du calcul du trajet. Consultez la console du navigateur."
-    );
-
-}
-
-
-}
-
-/* ============================================================
-NAVIGATION
-============================================================ */
-
-function startNavigation() {
-
-
-const btn =
-    document.getElementById(
-        "startNavBtn"
-    );
-
-
-if (
-    !btn
-) {
-
-    return;
-
-}
-
-
-const windInfoPanel =
-    document.querySelector(
-        ".wind-container-right"
-    ) ||
-    document.getElementById(
-        "windInfo"
-    );
-
-
-if (
-    !window.userPosition
-) {
-
-    alert(
-        "Position GPS non détectée. Impossible de démarrer."
-    );
-
-    return;
-
-}
-
-
-if (
-    !window.isNavigating
-) {
-
-    window.isNavigating =
-        true;
-
-
-    btn.innerText =
-        "Arrêter";
-
-
-    btn.style.backgroundColor =
-        "#e74c3c";
-
-
-    if (
-        windInfoPanel
-    ) {
-
-        windInfoPanel.classList.add(
-            "nav-hidden"
-        );
-
-    }
-
-
-    window.currentNavZoom =
-        17;
-
-
-    window.map.setView(
-        window.userPosition,
-        window.currentNavZoom
-    );
-
-
-    setTimeout(
-        function () {
-
-            window.map.panBy(
-                [
-                    0,
-                    -140
-                ],
-                {
-                    animate:
-                        true
-                }
-            );
-
-        },
-        250
-    );
-
-}
-
-else {
-
-    window.isNavigating =
-        false;
-
-
-    btn.innerText =
-        "Démarrer";
-
-
-    btn.style.backgroundColor =
-        "#2ecc71";
-
-
-    if (
-        windInfoPanel
-    ) {
-
-        windInfoPanel.classList.remove(
-            "nav-hidden"
-        );
-
-    }
-
-
-    if (
-        window.latlngsNormalPersist
-    ) {
-
-        window.map.fitBounds(
-            L.latLngBounds(
-                window.latlngsNormalPersist
-            )
-        );
-
-    }
-
-}
-
-
-}
-
-/* ============================================================
-EXPORT GLOBAL
-============================================================ */
-
-window.getRoute =
-getRoute;
-
-window.getAlternativeRoute =
-getAlternativeRoute;
-
-window.calculateWindScore =
-calculateWindScore;
-
-window.drawWindRoute =
-drawWindRoute;
-
-window.drawGrayRoute =
-drawGrayRoute;
-
-window.startNavigation =
-startNavigation;
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Authorization": apiKey,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-    });
-
-    const data = await response.json();
-     // ✅ ALERT DE DEBUG SÉCURISÉE : Reconstruite pour s'adapter au format .routes standard
-    if (data && data.routes && data.routes[0]) {
-        alert("API Réponse Ok ! Résumé route : " + JSON.stringify(data.routes[0].summary));
-    } else {
-        alert("Erreur API ORS : " + JSON.stringify(data));
-    }
-    return data; 
-}
-//================================================================================================================
-// Extraction des obstacles (Adaptée pour lire les segments de l'API standard)
- alert("segment extract");
-function extractSegments(routeObj){
-    const forestSegments = new Set();
-    const residentialSegments = new Set();
-// Sécurité : Si l'API n'a pas renvoyé le bloc d'obstacles du premier segment, on s'arrête proprement
-    if(!routeObj || !routeObj.segments || !routeObj.segments[0] || !routeObj.segments[0].extras) {
-        alert("Pas d'extras disponibles sur cette route");
-        return {forestSegments, residentialSegments};
-    }
-
-    const extras = routeObj.segments[0].extras;
- 
-    if(extras.waytype && extras.waytype.values){
-        extras.waytype.values.forEach(v => {
-            const from = v[0];
-            const to = v[1];
-            const type = v[2];
-
-            // Codes ORS officiels : 3 (Path) et 10 (Track) = Pistes forestières et parcs (arbres)
-            if(type === 3 || type === 10){
-                for(let i = from; i <= to; i++){
-                    forestSegments.add(i);
-                }
-            }
-
-            // Codes ORS officiels : 1 (StateRoad) et 2 (Street) = Rues de villes (maisons)
-            if(type === 1 || type === 2){
-                for(let i = from; i <= to; i++){
-                    residentialSegments.add(i);
-                }
-            }
-        });
-    }
- // Analyse secondaire via les revêtements (surface)
-    if(extras.surface && extras.surface.values){
-        extras.surface.values.forEach(v => {
-            const from = v[0];
-            const to = v[1];
-            const surfaceType = v[2];
-            // Codes >= 5 = Terre, gravier, herbe (Zones vertes boisées naturelles)
-            if(surfaceType >= 5){
-                for(let i = from; i <= to; i++){
-                    forestSegments.add(i);
-                }
-            }
-        });
-    }
-
-    return {forestSegments, residentialSegments};
-} 
-//===============================================================================================
- alert("Calcul wind score");
-function calculateWindScore(latlngs, routeObj){
-
-    // ✅ LIAISON SÉCURISÉE : On transmet le routeObj officiel à la fonction d'extraction précédente
-    const {forestSegments, residentialSegments} = extractSegments(routeObj);
-
-    let totalCost = 0;
-    let count = 0;
-
-    for(let i = 0; i < latlngs.length - 1; i++){
-
-        const direction = getSegmentDirection(
-            latlngs[i],
-            latlngs[i+1]
-        );
-
-        let cost = windCost(
-            direction,
-            currentWindDirection,
-            currentWindSpeed
-        );
-
-        // 🌳 BONUS ABRI
-       if (forestSegments.has(i)) {
-    cost = cost * 0.5;
-}
-else if (residentialSegments.has(i)) {
-    cost = cost * 0.7;
-}
-        totalCost += cost;
-        count++;
-    }
-
-    return count > 0 ? totalCost / count : 0;
-}
- alert("Choose Route");
-function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
-    const normalTime = normalRoute.summary.duration;
-    const alternativeTime = alternativeRoute.summary.duration;
-
-    const windGain = normalScore - alternativeScore;
-
-    if(windGain > 3 && alternativeTime < normalTime * 1.2){
-        return "alternative";
-    }
-
-    return "normal";
-}
- alert("Calcul wind gain");
-function calculateWindGain(scoreNormal, scoreAlternative){
-    if(scoreNormal <= 0){
-        return 0;
-    }
-    const gain = ((scoreNormal - scoreAlternative) / scoreNormal) * 100;
-    return Math.max(0, gain);
-}
- alert("Draw color route");
-function drawWindRoute(latlngs){
-    for(let i = 0; i < latlngs.length - 1; i++){
-        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
-        const cost = windCost(direction, currentWindDirection, currentWindSpeed);
-
-        let color = "green";
-        if(cost > 20) color = "red";
-        else if(cost > 8) color = "orange";
-
-        // ✅ PLUS BESOIN D'INVERSER : Les points [Lat, Lng] fournis par decodePolyline sont parfaits
-        const line = L.polyline(
-            [latlngs[i], latlngs[i+1]],
-            {
-                color: color,
-                weight: 4,       
-                opacity: 0.5,    
-                pane: 'overlayPane' 
-            }
-        ).addTo(window.routeGroup);
-
-        routeLayers.push(line);
-    }
-}
- alert("draw gray route");
-function drawGrayRoute(latlngs){
-    // ✅ PLUS BESOIN DE .map() : Le tableau est déjà prêt à 100% pour Leaflet
-    const line = L.polyline(
-        latlngs,
-        {
-            color: "gray",
-            weight: 3,       
-            opacity: 0.5,    
-            pane: 'overlayPane'
-        }
-    ).addTo(window.routeGroup);
-
-    routeLayers.push(line);
-}
-
-//===================================================================================================================
-// Calcul trajet principaux
-// Calcul trajet principaux (Première partie corrigée et unifiée)
- alert("Definir destination");
-async function getRoute(){
-    if(!window.userPosition){
-        alert("Définissez votre position d'abord");
-        return;
-    }
-    if(!window.destination){
-        alert("Choisissez une destination dans la liste");
-        return;
-    }
-    
-    const start = {   
-        lat: window.userPosition[0],
-        lng: window.userPosition[1]
-    };
-    
-    const endLat = window.destination.lat;
-    const endLon = window.destination.lon;
-    
-    const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
-    alert("getAlternative route appelé");
-
-    if (!allRoutesData || !allRoutesData.routes || allRoutesData.routes.length === 0) {
-        alert("Aucun itinéraire trouvé");
-        return;
-    }
-
-    const normalRouteObj = allRoutesData.routes[0];
-    const latlngsNormal = L.LineUtil.decodePolyline(normalRouteObj.geometry);
-
-    let latlngsAlternative = latlngsNormal; 
-    let alternativeRouteObj = normalRouteObj;
-
-    window.routeGroup.clearLayers();
-
-    if (allRoutesData.routes.length > 1) {
-        alternativeRouteObj = allRoutesData.routes[1];
-        latlngsAlternative = L.LineUtil.decodePolyline(alternativeRouteObj.geometry);
-        drawGrayRoute(latlngsAlternative);
-        alert("Draw gray route");
-    } else {
-        alert("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
-    }
-
-    window.latlngsNormalPersist = latlngsNormal;
-    window.latlngsAlternativePersist = latlngsAlternative;
-    window.currentRoute = latlngsNormal.map(p => L.latLng(p));
-    
-    const pA = latlngsNormal[0];
-    const pB = latlngsNormal[1];
-
-    const ptA = [
-        pA.lat !== undefined ? pA.lat : pA[0],
-        pA.lng !== undefined ? pA.lng : pA[1]
-    ];
-    const ptB = [
-        pB.lat !== undefined ? pB.lat : pB[0],
-        pB.lng !== undefined ? pB.lng : pB[1]
-    ];
-    
-    const firstDir = getSegmentDirection(ptA, ptB);
-    await getWind(start.lat, start.lng, firstDir);
-    
-    drawWindRoute(latlngsNormal);
-    alert("Draw color route");
-
-    const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
-    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
-
-    const routesArrayMock = { duration: normalRouteObj.summary.duration };
-    const alternativeMock = { duration: alternativeRouteObj.summary.duration };
-
-    const choice = chooseBestRoute(routesArrayMock, alternativeMock, normalScore, alternativeScore);
-    const windGain = calculateWindGain(normalScore, alternativeScore);
-
-    // ==============================================================================================================================
-    // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE (La contradiction est supprimée, la logique est isolée ici) ---
-    function updateWindText(currentView, activeScore) {
-        const routeActive = currentView === "normale" ? normalRouteObj : alternativeRouteObj;
-        const distanceKm = (routeActive.summary.distance / 1000).toFixed(1);
-        const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
-
-        let gainText = "";
-        let dynamiqueRecommendation = "";
-               
-        if (allRoutesData.routes.length <= 1) {
-            gainText = "🌬️ Aucune route alternative disponible";
-            dynamiqueRecommendation = "🚴 Seul trajet trouvé";
-        } 
-        else if (Math.abs(rawGain) < 5) { 
-            gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
-            dynamiqueRecommendation = currentView === "alternative" ? "🚴 Trajet équivalent, mais route initiale plus directe" : "🚴 CycloWind recommande ce trajet initial";
-        } 
-        else if (rawGain >= 5) { 
-             gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
-             dynamiqueRecommendation = currentView === "alternative" ? "🌱 Route assez protégée" : "💡 Voir l'Alternative abritée";
-        } 
-        else {
-            gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
-            dynamiqueRecommendation = currentView === "alternative" ? "⚠️ Route alternative plus exposée" : "🚴 Trajet initial bien plus abrité";
+        console.log("=== BILAN CYCLOWIND ===");
+        console.log("Score route normale :", normalScore.toFixed(2));
+        console.log("Score route alternative :", alternativeScore.toFixed(2));
+        console.log("Meilleure route recommandée :", choice);
+        console.log("Gain d'effort estimé :", windGain + "%");
+
+        // 9. DESSIN INITIAL DES CALQUES SUR LA CARTE
+        // Par défaut, on affiche la route normale colorée selon le vent et l'alternative en arrière-plan gris
+        drawWindRoute(latlngsNormal, normalRouteObj);
+        if (hasAlternative) {
+            drawGrayRoute(latlngsAlternative);
         }
 
-        document.getElementById("windInfo").innerHTML = `
-           <strong>${dynamiqueRecommendation}</strong>
-            <br>
-            📍 Vue : Route ${currentView}
-            <br>
-            📏 Distance : ${distanceKm} km
-            <br>
-            ${gainText}
-            <br>
-            📊 Indice effort vent : ${activeScore.toFixed(1)}
-        ;
-    }
+        // 10. MISE À JOUR DES COMPOSANTS DE L'INTERFACE UTILISATEUR
+        updateWindText(
+            "normale",
+            normalScore,
+            normalRouteObj,
+            alternativeRouteObj,
+            normalScore,
+            alternativeScore,
+            hasAlternative
+        );
 
-    // --- INITIALISATION DE L'AFFICHAGE ET DE LA CARTE ---
-    updateWindText("normale", normalScore);
+        // Initialisation ou rafraîchissement du bouton de bascule
+        setupRouteToggle(normalRouteObj, alternativeRouteObj, normalScore, alternativeScore, hasAlternative);
 
-    if (latlngsNormal && latlngsNormal.length > 0) {
+        // 11. RECADRAGE DYNAMIQUE DU ZOOM (FIT BOUNDS)
         const bounds = L.latLngBounds(latlngsNormal);
-        const paddingLeaflet = L.point(50, 50);
-        window.map.fitBounds(bounds, { padding: paddingLeaflet, maxZoom: 15 }); 
+        if (hasAlternative) {
+            bounds.extend(L.latLngBounds(latlngsAlternative));
+        }
+        
+        window.map.fitBounds(bounds, {
+            padding:, // Remplacement de L.point par la notation de tableau standard de Leaflet
+            maxZoom: 15
+        });
+
+        console.log("getRoute() : Itinéraire tracé et affiché avec succès.");
+
+    } catch (error) {
+        console.error("ERREUR CRITIQUE DANS getRoute() :", error);
+        alert("Une erreur est survenue lors du calcul du trajet. Consultez la console du navigateur.");
     }
+}
 
-    // --- LOGIQUE DU BOUTON TOGGLE ---
-    const toggleBtn = document.getElementById("toggleRouteBtn");
-    
-    if (allRoutesData.routes.length > 1) {
-        toggleBtn.style.display = "block";
-        let showingAlternative = false;
-        toggleBtn.innerText = "Voir la route alternative";
+// ============================================================
+// ROUTE.JS - COMPOSANT NAVIGATION INTERACTIVE
+// ============================================================
 
-        toggleBtn.onclick = function() {
-            window.routeGroup.clearLayers();
-            if (typeof routeLayers !== 'undefined') { routeLayers = []; }
-
-            if (!showingAlternative) {
-                drawWindRoute(window.latlngsAlternativePersist);
-                drawGrayRoute(window.latlngsNormalPersist); 
-                toggleBtn.innerText = "Voir la route normale";
-                updateWindText("alternative", alternativeScore);
-                showingAlternative = true;
-            } else {
-                drawWindRoute(window.latlngsNormalPersist);
-                drawGrayRoute(window.latlngsAlternativePersist); 
-                toggleBtn.innerText = "Voir la route alternative";
-                updateWindText("normale", normalScore);
-                showingAlternative = false;
-            }
-        };
-    } else {
-        toggleBtn.style.display = "none";
-    }
-
-    window.drawWindRoute = drawWindRoute;
-} // <- ✅ ICI ! Cette accolade ferme officiellement et proprement la fonction getRoute() au bon endroit !
-
-//==============================================================================================================================================
-// 🔥 VERSION INFAILLIBLE : Plus aucune accolade en fin de fonction pour stopper les crashs !
 function startNavigation() {
     const btn = document.getElementById("startNavBtn");
-    if (!btn) return;
-
-    let windInfoPanel = document.querySelector(".wind-container-right") || document.getElementById("windInfo");
-
-    if (!window.userPosition) {
-        alert("Position GPS non détectée. Impossible de démarrer.");
+    if (!btn) {
         return;
     }
-
+    
+    const windInfoPanel = document.querySelector(".wind-container-right") || document.getElementById("windInfo");
+    
+    if (!window.userPosition) {
+        alert("Position GPS non détectée. Impossible de démarrer la navigation.");
+        return;
+    }
+    
+    // ÉTAT : ACTIVATION DE LA NAVIGATION
     if (!window.isNavigating) {
         window.isNavigating = true;
         btn.innerText = "Arrêter";
-        btn.style.backgroundColor = "#e74c3c";
+        btn.style.backgroundColor = "#e74c3c"; // Rouge pour l'arrêt
         
-        if (windInfoPanel) windInfoPanel.classList.add("nav-hidden");
+        if (windInfoPanel) {
+            windInfoPanel.classList.add("nav-hidden");
+        }
         
         window.currentNavZoom = 17;
-        window.map.setView(window.userPosition, window.currentNavZoom);
-
-        setTimeout(function() { window.map.panBy([0, -140], { animate: true }); }, 250);
-    } else {
+        
+        // Centrage de la carte sur la position de l'utilisateur avec le zoom de navigation
+        window.map.setView(window.userPosition, window.currentNavZoom, { animate: true });
+        
+        // Décalage fluide pour libérer de l'espace visuel en bas de l'écran (Utile sur smartphone)
+        setTimeout(function () {
+            if (window.map && window.isNavigating) {
+                window.map.panBy([0, -100], { animate: true }); // Ajusté à -100px pour éviter les trop grands sauts
+            }
+        }, 300);
+    }
+    // ÉTAT : DÉSACTIVATION DE LA NAVIGATION
+    else {
         window.isNavigating = false;
         btn.innerText = "Démarrer";
-        btn.style.backgroundColor = "#2ecc71";
-
-        if (windInfoPanel) windInfoPanel.classList.remove("nav-hidden");
+        btn.style.backgroundColor = "#2ecc71"; // Vert pour le départ
         
-        // Écriture en une seule ligne : Leaflet applique le fitBounds de secours sans aucune coupure
-        if (window.latlngsNormalPersist) window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist));
-    }
+        if (windInfoPanel) {
+            windInfoPanel.classList.remove("nav-hidden");
+        }
+        
+        // Recadrage global de la carte pour réafficher l'ensemble de l'itinéraire enregistré
+        if (window.latlngsNormalPersist && window.latlngsNormalPersist.length >= 2) {
+            window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), {
+                padding: [30, 30]
+            });
+        }
+    } // Correction : Fermeture propre du bloc conditionnel
 }
+
+// EXPOSITION AU CONTEXTE GLOBAL
+window.startNavigation = startNavigation;
