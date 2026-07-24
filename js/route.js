@@ -261,7 +261,7 @@ async function getRoute(){
     window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
 
     const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
-    await getWind(start.lat, start.lng, firstDir);
+   // await getWind(start.lat, start.lng, firstDir);
     
     // Dessine la route principale en couleur (elle gère sa propre inversion)
     drawWindRoute(latlngsNormal);
