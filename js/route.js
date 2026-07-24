@@ -240,7 +240,7 @@ async function getRoute(){
     let latlngsAlternative = latlngsNormal; 
     let alternativeRouteObj = normalRouteObj;
 
-    window.routeGroup.clearLayers();
+    //window.routeGroup.clearLayers();
 
     // ✅ RECADRAGE DES ACCOLADES : Tout le bloc alternatif est maintenant bien rangé au bon endroit
     if (allRoutesData.routes.length > 1) {
