@@ -57,7 +57,7 @@ alert("Pas extras");
         return {forestSegments, residentialSegments};
     }
 
-    const extras = feature.properties.extras;
+    const extras = feature.properties.extra_info;
  
     if(extras.waytype){
         extras.waytype.values.forEach(v => {
