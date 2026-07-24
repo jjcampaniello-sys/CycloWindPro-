@@ -292,9 +292,8 @@ try {
 
     const data =
         await response.json();
-
-
-    console.log(
+alert("DONNÉES ORS COMPLÈTES :", JSON.stringify(data, null, 2));
+    alert(
         "Réponse complète ORS :",
         data
     );
