@@ -253,6 +253,7 @@ async function getRoute(){
         
         // Trace l'alternative grise en fond
         drawGrayRoute(latlngsAlternative);
+         alert("Draw gray route");
     } else {
         alert("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
     }
@@ -286,7 +287,7 @@ async function getRoute(){
     
     // Dessine la route principale en couleur (elle gère sa propre inversion)
     drawWindRoute(latlngsNormal);
-
+ alert("Draw color route");
     // ✅ CORRECTIF 3 : Transmission des objets de routes officiels aux calculs de scores d'abris
      const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
       const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
