@@ -141,8 +141,8 @@ else if (residentialSegments.has(i)) {
 }
 
 function chooseBestRoute(normalRoute, alternativeRoute, normalScore, alternativeScore){
-    const normalTime = normalRoute.duration;
-    const alternativeTime = alternativeRoute.duration;
+    const normalTime = normalRoute.summary.duration;
+    const alternativeTime = alternativeRoute.summary.duration;
 
     const windGain = normalScore - alternativeScore;
 
@@ -262,7 +262,13 @@ async function getRoute(){
 
     window.currentRoute = latlngsNormal.map(p => L.latLng(p));
     
-    const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
+    // ✅ CORRECTIF DE SÉCURITÉ GÉOMÉTRIQUE :
+    // On extrait les coordonnées [Lat, Lng] sous forme de sous-tableaux bruts 
+    // pour que getSegmentDirection([0], [1]) puisse faire ses soustractions sans crasher !
+    const ptA = [latlngsNormal[0].lat, latlngsNormal[0].lng];
+    const ptB = [latlngsNormal[1].lat, latlngsNormal[1].lng];
+    
+    const firstDir = getSegmentDirection(ptA, ptB);
     await getWind(start.lat, start.lng, firstDir);
     
     // Dessine la route principale en couleur (elle gère sa propre inversion)
