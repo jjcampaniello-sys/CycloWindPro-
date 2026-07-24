@@ -43,7 +43,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
     });
 
     const data = await response.json();
-    ''const feature = data.features[0];
+    //const feature = data.features[0];
      alert(JSON.stringify(data.features[0].properties));
     return data; 
 }
