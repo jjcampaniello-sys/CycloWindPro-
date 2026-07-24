@@ -163,34 +163,16 @@ function calculateWindGain(scoreNormal, scoreAlternative){
 
 function drawWindRoute(latlngs){
     for(let i = 0; i < latlngs.length - 1; i++){
-        const direction = getSegmentDirection(
-            latlngs[i],
-            latlngs[i+1]
-        );
+        const direction = getSegmentDirection(latlngs[i], latlngs[i+1]);
+        const cost = windCost(direction, currentWindDirection, currentWindSpeed);
 
-        const cost = windCost(
-            direction,
-            currentWindDirection,
-            currentWindSpeed
-        );
+        let color = "green";
+        if(cost > 20) color = "red";
+        else if(cost > 8) color = "orange";
 
-        let color;
-        if(cost > 20){
-            color = "red";
-        }
-        else if(cost > 8){
-            color = "orange";
-        }
-        else{
-            color = "green";
-        }
-
-         // 🔥 CORRECTIF : Inversion manuelle [Longitude, Latitude] -> [Latitude, Longitude] pour Leaflet
-        const pointA = [latlngs[i][1], latlngs[i][0]];
-        const pointB = [latlngs[i+1][1], latlngs[i+1][0]];
-
+        // ✅ PLUS BESOIN D'INVERSER : Les points [Lat, Lng] fournis par decodePolyline sont parfaits
         const line = L.polyline(
-            [pointA, pointB], // On passe les points corrigés à Leaflet
+            [latlngs[i], latlngs[i+1]],
             {
                 color: color,
                 weight: 4,       
@@ -204,22 +186,23 @@ function drawWindRoute(latlngs){
 }
 
 function drawGrayRoute(latlngs){
-    // 🔥 CORRECTIF : On applique l'inversion d'index [Lat, Lng] sur l'ensemble de la route alternative grise
-    const latlngsCorriges = latlngs.map(point => [point[1], point[0]]);
+    // ✅ PLUS BESOIN DE .map() : Le tableau est déjà prêt à 100% pour Leaflet
     const line = L.polyline(
-        latlngsCorriges,
+        latlngs,
         {
             color: "gray",
-            weight: 3,       // 🔥 CORRECTION : Alternative encore plus discrète (au lieu de 5)
-            opacity: 0.5,    // 🔥 AJOUT : Transparence à 50%
+            weight: 3,       
+            opacity: 0.5,    
             pane: 'overlayPane'
         }
     ).addTo(window.routeGroup);
 
     routeLayers.push(line);
 }
+
 //===================================================================================================================
 // Calcul trajet principaux
+// Calcul trajet principaux (Première partie corrigée et unifiée)
 async function getRoute(){
     
     if(!window.userPosition){
@@ -238,7 +221,7 @@ async function getRoute(){
         lng: window.userPosition[1]
     };
     
-       const endLat = window.destination.lat;
+    const endLat = window.destination.lat;
     const endLon = window.destination.lon;
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
@@ -249,23 +232,23 @@ async function getRoute(){
         return;
     }
 
-    // ✅ CORRECTIF 2 : Extraction directe via les objets de routes du format standard
     const normalRouteObj = allRoutesData.routes[0];
-    const coordsNormal = normalRouteObj.geometry.coordinates;
-    const latlngsNormal = coordsNormal.map(point => [point[0], point[1]]);
+    
+    // ✅ DECODAGE LEAFLET : Traduit instantanément le texte crypté en tableau [Latitude, Longitude]
+    const latlngsNormal = L.LineUtil.decodePolyline(normalRouteObj.geometry);
 
-     let latlngsAlternative = latlngsNormal; 
+    let latlngsAlternative = latlngsNormal; 
     let alternativeRouteObj = normalRouteObj;
 
-// Nettoyage de la carte avant de redessiner
     window.routeGroup.clearLayers();
-    
+
+    // ✅ RECADRAGE DES ACCOLADES : Tout le bloc alternatif est maintenant bien rangé au bon endroit
     if (allRoutesData.routes.length > 1) {
         alternativeRouteObj = allRoutesData.routes[1];
-        const coordsAlt = alternativeRouteObj.geometry.coordinates;
-        latlngsAlternative = coordsAlt.map(point => [point[0], point[1]]);
+        // ✅ Décodage également de la route alternative en [Latitude, Longitude]
+        latlngsAlternative = L.LineUtil.decodePolyline(alternativeRouteObj.geometry);
         
-        // Trace l'alternative grise en fond (elle gère sa propre inversion)
+        // Trace l'alternative grise en fond
         drawGrayRoute(latlngsAlternative);
     } else {
         console.log("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
@@ -273,7 +256,9 @@ async function getRoute(){
 
     window.latlngsNormalPersist = latlngsNormal;
     window.latlngsAlternativePersist = latlngsAlternative;
-    window.currentRoute = latlngsNormal.map(p => ({ lat: p[1], lng: p[0] }));
+    
+    // ✅ NETTOYAGE : Les points étant déjà [Lat, Lng], on les stocke directement sans ré-inverser
+    window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
 
     const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
     await getWind(start.lat, start.lng, firstDir);
@@ -301,6 +286,7 @@ async function getRoute(){
     let recommendation = choice === "alternative" && allRoutesData.routes.length > 1
         ? "🌱 CycloWind recommande l'alternative"
         : "🚴 CycloWind recommande ce trajet";
+
 //==============================================================================================================================
      // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
     function updateWindText(currentView, activeScore) {
