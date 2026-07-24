@@ -6,7 +6,7 @@ Gestion des itinéraires, vent, obstacles et affichage Leaflet
 /* ============================================================
 VARIABLES GLOBALES
 ============================================================ */
-
+alert("ROUTE.JS EST CHARGE");
 window.routeLayers = window.routeLayers || [];
 window.routeGroup = window.routeGroup || L.layerGroup();
 
@@ -1196,7 +1196,7 @@ toggleBtn.onclick =
 /* ============================================================
 FONCTION PRINCIPALE GETROUTE
 ============================================================ */
-
+alert("GETROUTE EST DEFINI");
 async function getRoute() {
 
 ```
