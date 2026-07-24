@@ -66,7 +66,7 @@ alert("avant extra_info");
             const type = v[2];
 
             // 🌳 chemins nature / forêt
-            if(type === 3 || type === 5){
+            if(type === 4 || type === 5){
                 for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
