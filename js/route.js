@@ -275,12 +275,9 @@ async function getRoute(){
     drawWindRoute(latlngsNormal);
 
     // ✅ CORRECTIF 3 : Transmission des objets de routes officiels aux calculs de scores d'abris
-                        // const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
-                       //  const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
+     const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
+      const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
 
-// ✅ FORCEZ DES SCORES FIXES DE TEST POUR LE DESIGN :
-    const normalScore = 15.5;
-    const alternativeScore = 10.2;
     
     // ✅ CORRECTIF 4 : Extraction du temps via le sous-objet .summary officiel du format standard
     const routesArrayMock = { duration: normalRouteObj.summary.duration };
