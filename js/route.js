@@ -15,7 +15,7 @@ function getSegmentDirection(p1, p2){
 
     return angle;
 }
-
+//========================================================================================================
 async function getAlternativeRoute(start, endLat, endLon) {
     const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
     const url = "https://api.openrouteservice.org/v2/directions/cycling-regular";
@@ -30,6 +30,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
+        geometry_format: "geojson",
     extra_info: ["waytype", "surface"]   
 };
 
@@ -51,6 +52,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
     }
     return data; 
 }
+//================================================================================================================
 // Extraction des obstacles (Adaptée pour lire les segments de l'API standard)
 function extractSegments(routeObj){
     const forestSegments = new Set();
@@ -101,6 +103,7 @@ function extractSegments(routeObj){
 
     return {forestSegments, residentialSegments};
 } 
+//===============================================================================================
 function calculateWindScore(latlngs, routeObj){
 
     // ✅ LIAISON SÉCURISÉE : On transmet le routeObj officiel à la fonction d'extraction précédente
@@ -214,7 +217,7 @@ function drawGrayRoute(latlngs){
 
     routeLayers.push(line);
 }
-
+//===================================================================================================================
 // Calcul trajet principaux
 async function getRoute(){
     
@@ -297,7 +300,7 @@ async function getRoute(){
     let recommendation = choice === "alternative" && allRoutesData.routes.length > 1
         ? "🌱 CycloWind recommande l'alternative"
         : "🚴 CycloWind recommande ce trajet";
-
+//==============================================================================================================================
      // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
     function updateWindText(currentView, activeScore) {
         // ✅ CORRIGÉ : Utilisation des nouveaux objets de routes valides
