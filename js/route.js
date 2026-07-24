@@ -265,8 +265,18 @@ async function getRoute(){
     // ✅ CORRECTIF DE SÉCURITÉ GÉOMÉTRIQUE :
     // On extrait les coordonnées [Lat, Lng] sous forme de sous-tableaux bruts 
     // pour que getSegmentDirection([0], [1]) puisse faire ses soustractions sans crasher !
-    const ptA = [latlngsNormal[0].lat, latlngsNormal[0].lng];
-    const ptB = [latlngsNormal[1].lat, latlngsNormal[1].lng];
+     // ✅ REMPLACEZ PAR CE BLOC UNIVERSEL ET SÉCURISÉ :
+    const pA = latlngsNormal[0];
+    const pB = latlngsNormal[1];
+
+    const ptA = [
+        pA.lat !== undefined ? pA.lat : pA[0],
+        pA.lng !== undefined ? pA.lng : pA[1]
+    ];
+    const ptB = [
+        pB.lat !== undefined ? pB.lat : pB[0],
+        pB.lng !== undefined ? pB.lng : pB[1]
+    ];
     
     const firstDir = getSegmentDirection(ptA, ptB);
     await getWind(start.lat, start.lng, firstDir);
