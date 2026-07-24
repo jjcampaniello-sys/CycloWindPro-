@@ -30,7 +30,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-    extra_info: ["waytype", "surface"]   
+   extra_info: ["waytype", "surface", "roadaccessrestrictions"]
 };
 
     const response = await fetch(url, {
@@ -50,13 +50,13 @@ function extractSegments(feature){
 
     const forestSegments = new Set();
     const residentialSegments = new Set();
-alert("avant extra_info");
-    if(!feature.properties.extra_info) {
-         alert("extra_info trouvé");
+alert("Pas extras");
+    if(!feature.properties.extras) {
+         alert("extras OK");
         return {forestSegments, residentialSegments};
     }
 
-    const extras = feature.properties.extra_info;
+    const extras = feature.properties.extras;
  
     if(extras.waytype){
         extras.waytype.values.forEach(v => {
@@ -104,11 +104,18 @@ function calculateWindScore(latlngs, feature){
         );
 
         // 🌳 BONUS ABRI
-       if (forestSegments.has(i)) {
-    cost = cost * 0.5;
+     if (forestSegments.has(i)) {
+
+    // 🌳 forêt = forte protection
+    const reduction = 0.5 + (currentWindSpeed / 100); 
+    cost = cost * reduction;
+
 }
 else if (residentialSegments.has(i)) {
-    cost = cost * 0.7;
+
+    // 🏠 ville = protection moyenne
+    const reduction = 0.7 + (currentWindSpeed / 200);
+    cost = cost * reduction;
 }
         totalCost += cost;
         count++;
@@ -181,7 +188,7 @@ function drawGrayRoute(latlngs){
         latlngs,
         {
             color: "gray",
-            weight: 3,       // 🔥 CORRECTION : Alternative encore plus discrète (au lieu de 5)
+            weight: 4,       // 🔥 CORRECTION : Alternative encore plus discrète (au lieu de 5)
             opacity: 0.5,    // 🔥 AJOUT : Transparence à 50%
             pane: 'overlayPane'
         }
