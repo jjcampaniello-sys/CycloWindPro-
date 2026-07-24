@@ -80,6 +80,13 @@ alert("Pas extras");
             }
         });
     }
+// 👇 👉 AJOUTE ICI 👇
+
+    document.getElementById("debug").innerHTML += 
+        "<br>Segments forêt: " + forestSegments.size;
+
+    document.getElementById("debug").innerHTML += 
+        "<br>Segments résidentiel: " + residentialSegments.size;
 
     return {forestSegments, residentialSegments};
 }
