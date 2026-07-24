@@ -1,4 +1,7 @@
 // Analyse du vent
+window.currentWindSpeed = 0;
+window.currentWindDirection = 0;
+window.windControl = null;
 function windDirectionText(deg){
 
     const directions = [
@@ -43,7 +46,9 @@ function windEffect(rideDirection, windDirection) {
 
 // Coût du vent
 function windCost(roadDirection, windDirection, windSpeed) {
-
+// Si les données météo ne sont pas encore arrivées, on renvoie un coût neutre pour ne pas crasher
+    if (windDirection === undefined || windSpeed === undefined) return 0;
+    
     let angle = Math.abs(roadDirection - windDirection);
 
     if (angle > 180) {
@@ -73,8 +78,9 @@ async function getWind(lat, lon, rideDirection) {
         const response = await fetch(url);
         const data = await response.json();
 
-        currentWindSpeed = data.current.wind_speed_10m;
-        currentWindDirection = data.current.wind_direction_10m;
+      // Enregistrement sécurisé dans les variables partagées de l'application
+        window.currentWindSpeed = data.current.wind_speed_10m;
+        window.currentWindDirection = data.current.wind_direction_10m;
 
 
         if (windControl) {
