@@ -56,6 +56,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
 //================================================================================================================
 // Extraction des obstacles (Adaptée pour lire les segments de l'API standard)
 function extractSegments(routeObj){
+   alert("segements extract);
     const forestSegments = new Set();
     const residentialSegments = new Set();
 // Sécurité : Si l'API n'a pas renvoyé le bloc d'obstacles du premier segment, on s'arrête proprement
