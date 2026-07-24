@@ -104,7 +104,7 @@ OUTILS COORDONNÉES
      ) {
          return L.LineUtil.decodePolyline(geometry);
      }
-    ```
+   
 
     } catch (error) {
 
@@ -113,7 +113,7 @@ OUTILS COORDONNÉES
          "Erreur décodage polyline :",
          error
      );
-    ```
+   
 
     }
 
@@ -166,7 +166,7 @@ DIRECTION DU SEGMENT
 
 function getSegmentDirection(p1, p2) {
 
-```
+
 const point1 = normalizeLatLng(p1);
 const point2 = normalizeLatLng(p2);
 
@@ -192,7 +192,7 @@ angle =
     (angle + 180) % 360;
 
 return angle;
-```
+
 
 }
 
@@ -206,7 +206,7 @@ endLat,
 endLon
 ) {
 
-```
+
 const apiKey =
     "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU5N2JkNDJjYTM5MzRjYTFhODQ1MTE2YjViNmQ2ZGJjIiwiaCI6Im11cm11cjY0In0=";
 
@@ -332,7 +332,6 @@ alert("DONNÉES ORS COMPLÈTES :", JSON.stringify(data, null, 2));
     return null;
 
 }
-```
 
 }
 
@@ -342,7 +341,6 @@ EXTRACTION DES OBSTACLES / ABRIS
 
 function extractSegments(routeObj) {
 
-```
 const forestSegments =
     new Set();
 
@@ -506,7 +504,7 @@ return {
     forestSegments,
     residentialSegments
 };
-```
+
 
 }
 
@@ -519,7 +517,7 @@ latlngs,
 routeObj
 ) {
 
-```
+
 if (
     !latlngs ||
     latlngs.length < 2
@@ -598,7 +596,7 @@ for (
 return count > 0
     ? totalCost / count
     : 0;
-```
+
 
 }
 
@@ -642,7 +640,7 @@ if (
 
 
 return "normal";
-```
+
 
 }
 
@@ -655,7 +653,6 @@ scoreNormal,
 scoreAlternative
 ) {
 
-```
 if (
     scoreNormal <= 0
 ) {
@@ -680,7 +677,7 @@ return Math.max(
     0,
     gain
 );
-```
+
 
 }
 
@@ -692,7 +689,6 @@ function getWindColor(
 cost
 ) {
 
-```
 if (
     cost > 20
 ) {
@@ -710,7 +706,7 @@ if (
 }
 
 return "green";
-```
+
 
 }
 
@@ -723,7 +719,7 @@ latlngs,
 routeObj = null
 ) {
 
-```
+
 if (
     !latlngs ||
     latlngs.length < 2
@@ -820,7 +816,6 @@ for (
     );
 
 }
-```
 
 }
 
@@ -832,7 +827,6 @@ function drawGrayRoute(
 latlngs
 ) {
 
-```
 if (
     !latlngs ||
     latlngs.length < 2
@@ -869,7 +863,7 @@ line.addTo(
 window.routeLayers.push(
     line
 );
-```
+
 
 }
 
@@ -879,7 +873,6 @@ NETTOYAGE DES ROUTES
 
 function clearRouteLayers() {
 
-```
 if (
     window.routeGroup
 ) {
@@ -890,7 +883,7 @@ if (
 
 
 window.routeLayers = [];
-```
+
 
 }
 
@@ -908,7 +901,6 @@ alternativeScore,
 hasAlternative
 ) {
 
-```
 const routeActive =
     currentView === "normale"
         ? normalRouteObj
@@ -1045,13 +1037,12 @@ if (
         📊 Indice effort vent :
         ${Number(activeScore).toFixed(1)}
 
-    `;
+    ;
 
     windInfo.style.display =
         "block";
 
 }
-```
 
 }
 
@@ -1067,7 +1058,6 @@ alternativeScore,
 hasAlternative
 ) {
 
-```
 const toggleBtn =
     document.getElementById(
         "toggleRouteBtn"
@@ -1189,17 +1179,16 @@ toggleBtn.onclick =
         }
 
     };
-```
+
 
 }
 
 /* ============================================================
 FONCTION PRINCIPALE GETROUTE
 ============================================================ */
-alert("GETROUTE EST DEFINI");
-async function getRoute() {
 
-```
+async function getRoute() {
+alert("GETROUTE EST DEFINI");
 try {
 
     console.log(
@@ -1616,7 +1605,7 @@ try {
     );
 
 }
-```
+
 
 }
 
@@ -1626,7 +1615,7 @@ NAVIGATION
 
 function startNavigation() {
 
-```
+
 const btn =
     document.getElementById(
         "startNavBtn"
@@ -1759,7 +1748,7 @@ else {
     }
 
 }
-```
+
 
 }
 
@@ -2067,7 +2056,7 @@ async function getRoute(){
             ${gainText}
             <br>
             📊 Indice effort vent : ${activeScore.toFixed(1)}
-        `;
+        ;
     }
 
     // --- INITIALISATION DE L'AFFICHAGE ET DE LA CARTE ---
