@@ -258,10 +258,12 @@ async function getRoute(){
     window.latlngsAlternativePersist = latlngsAlternative;
     
     // ✅ NETTOYAGE : Les points étant déjà [Lat, Lng], on les stocke directement sans ré-inverser
-    window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
+                               //window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
 
+    window.currentRoute = latlngsNormal.map(p => L.latLng(p));
+    
     const firstDir = getSegmentDirection(latlngsNormal[0], latlngsNormal[1]);
-   // await getWind(start.lat, start.lng, firstDir);
+    await getWind(start.lat, start.lng, firstDir);
     
     // Dessine la route principale en couleur (elle gère sa propre inversion)
     drawWindRoute(latlngsNormal);
