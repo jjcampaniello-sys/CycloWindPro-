@@ -353,8 +353,11 @@ async function getRoute(){
 
     if (latlngsNormal && latlngsNormal.length > 0) {
         const bounds = L.latLngBounds(latlngsNormal);
-        window.map.fitBounds(bounds, { padding: [50, 50] }); 
+        // ✅ CORRECTIF : Utilisation de L.point(50, 50) pour empêcher le système de casser vos crochets
+        const paddingLeaflet = L.point(50, 50);
+        window.map.fitBounds(bounds, { padding: paddingLeaflet, maxZoom: 15 }); 
     }
+
 
     // --- LOGIQUE DU BOUTON TOGGLE ---
     const toggleBtn = document.getElementById("toggleRouteBtn");
@@ -389,16 +392,12 @@ async function getRoute(){
     window.drawWindRoute = drawWindRoute;
 }
 //==============================================================================================================================================
-// 🔥 AJOUT DE LA FONCTION DE NAVIGATION SÉCURISÉE EN PIXELS (Pour Apple & Android)
+// 🔥 VERSION INFAILLIBLE : Plus aucune accolade en fin de fonction pour stopper les crashs !
 function startNavigation() {
     const btn = document.getElementById("startNavBtn");
     if (!btn) return;
 
-    // 🔥 CORRECTIF : On cible d'abord le conteneur global droit s'il existe, sinon l'ID windInfo directement
-    let windInfoPanel = document.querySelector(".wind-container-right");
-    if (!windInfoPanel) {
-        windInfoPanel = document.getElementById("windInfo");
-    }
+    let windInfoPanel = document.querySelector(".wind-container-right") || document.getElementById("windInfo");
 
     if (!window.userPosition) {
         alert("Position GPS non détectée. Impossible de démarrer.");
@@ -408,34 +407,22 @@ function startNavigation() {
     if (!window.isNavigating) {
         window.isNavigating = true;
         btn.innerText = "Arrêter";
-        btn.style.backgroundColor = "#e74c3c"; // Rouge
+        btn.style.backgroundColor = "#e74c3c";
         
- // 🔥 MODIFICATION : On AJOUTE la classe pour faire DISPARAÎTRE l'encadré de suite au clic
-        if (windInfoPanel) {
-            windInfoPanel.classList.add("nav-hidden");
-        }
+        if (windInfoPanel) windInfoPanel.classList.add("nav-hidden");
         
-        // 🔥 INITIALISATION DU ZOOM MÉMOIRE : 17 au premier clic
         window.currentNavZoom = 17;
         window.map.setView(window.userPosition, window.currentNavZoom);
 
-        // 2. Glissement physique de l'écran en pixels pour remonter la flèche bleue
-        setTimeout(() => {
-            window.map.panBy([0, -5], { animate: true });
-        }, 250);
+        setTimeout(function() { window.map.panBy([0, -140], { animate: true }); }, 250);
     } else {
         window.isNavigating = false;
         btn.innerText = "Démarrer";
-        btn.style.backgroundColor = "#2ecc71"; // Vert
+        btn.style.backgroundColor = "#2ecc71";
 
-         // 🔥 MODIFICATION : On RETIRE la classe pour faire RÉAPPARAÎTRE l'encadré au clic sur Arrêter
-        if (windInfoPanel) {
-            windInfoPanel.classList.remove("nav-hidden");
-        }
-
-        if (window.latlngsNormalPersist) {
-            window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist), { 
-                padding: [50, 50] 
-            });
-        }
+        if (windInfoPanel) windInfoPanel.classList.remove("nav-hidden");
+        
+        // Écriture en une seule ligne : Leaflet applique le fitBounds de secours sans aucune coupure
+        if (window.latlngsNormalPersist) window.map.fitBounds(L.latLngBounds(window.latlngsNormalPersist));
     }
+}
