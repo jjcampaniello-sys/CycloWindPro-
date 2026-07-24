@@ -66,14 +66,14 @@ alert("avant extra_info");
             const type = v[2];
 
             // 🌳 chemins nature / forêt
-            if(type === 3 || type === 10){
+            if(type === 3 || type === 5){
                 for(let i = from; i <= to; i++){
                     forestSegments.add(i);
                 }
             }
 
             // 🏠 zones résidentielles
-            if(type === 1 || type === 2){
+            if(type === 2 || type === 3){
                 for(let i = from; i <= to; i++){
                     residentialSegments.add(i);
                 }
