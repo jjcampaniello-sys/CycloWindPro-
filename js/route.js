@@ -228,7 +228,7 @@ async function getRoute(){
     const endLon = window.destination.lon;
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
-    
+     alert("getAlternative route appelé");
     // ✅ CORRECTIF 1 : Utilisation du tableau officiel .routes à la place de .features
     if (!allRoutesData || !allRoutesData.routes || allRoutesData.routes.length === 0) {
         alert("Aucun itinéraire trouvé");
