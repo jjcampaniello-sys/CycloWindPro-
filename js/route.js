@@ -207,18 +207,15 @@ function drawGrayRoute(latlngs){
 // Calcul trajet principaux (Première partie corrigée et unifiée)
  alert("Definir destination");
 async function getRoute(){
-    
     if(!window.userPosition){
         alert("Définissez votre position d'abord");
         return;
     }
-    
     if(!window.destination){
         alert("Choisissez une destination dans la liste");
         return;
     }
     
-    // 🔥 Sécurisation des index : Index 0 = Latitude, Index 1 = Longitude selon votre gps.js
     const start = {   
         lat: window.userPosition[0],
         lng: window.userPosition[1]
@@ -228,48 +225,34 @@ async function getRoute(){
     const endLon = window.destination.lon;
     
     const allRoutesData = await getAlternativeRoute(start, endLat, endLon);
-     alert("getAlternative route appelé");
-    // ✅ CORRECTIF 1 : Utilisation du tableau officiel .routes à la place de .features
+    alert("getAlternative route appelé");
+
     if (!allRoutesData || !allRoutesData.routes || allRoutesData.routes.length === 0) {
         alert("Aucun itinéraire trouvé");
         return;
     }
 
     const normalRouteObj = allRoutesData.routes[0];
-    
-    // ✅ DECODAGE LEAFLET : Traduit instantanément le texte crypté en tableau [Latitude, Longitude]
     const latlngsNormal = L.LineUtil.decodePolyline(normalRouteObj.geometry);
 
     let latlngsAlternative = latlngsNormal; 
     let alternativeRouteObj = normalRouteObj;
 
-    //window.routeGroup.clearLayers();
+    window.routeGroup.clearLayers();
 
-    // ✅ RECADRAGE DES ACCOLADES : Tout le bloc alternatif est maintenant bien rangé au bon endroit
     if (allRoutesData.routes.length > 1) {
         alternativeRouteObj = allRoutesData.routes[1];
-        // ✅ Décodage également de la route alternative en [Latitude, Longitude]
         latlngsAlternative = L.LineUtil.decodePolyline(alternativeRouteObj.geometry);
-        
-        // Trace l'alternative grise en fond
         drawGrayRoute(latlngsAlternative);
-         alert("Draw gray route");
+        alert("Draw gray route");
     } else {
         alert("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
     }
 
     window.latlngsNormalPersist = latlngsNormal;
     window.latlngsAlternativePersist = latlngsAlternative;
-    
-    // ✅ NETTOYAGE : Les points étant déjà [Lat, Lng], on les stocke directement sans ré-inverser
-                               //window.currentRoute = latlngsNormal.map(p => ({ lat: p[0], lng: p[1] }));
-
     window.currentRoute = latlngsNormal.map(p => L.latLng(p));
     
-    // ✅ CORRECTIF DE SÉCURITÉ GÉOMÉTRIQUE :
-    // On extrait les coordonnées [Lat, Lng] sous forme de sous-tableaux bruts 
-    // pour que getSegmentDirection([0], [1]) puisse faire ses soustractions sans crasher !
-     // ✅ REMPLACEZ PAR CE BLOC UNIVERSEL ET SÉCURISÉ :
     const pA = latlngsNormal[0];
     const pB = latlngsNormal[1];
 
@@ -285,41 +268,23 @@ async function getRoute(){
     const firstDir = getSegmentDirection(ptA, ptB);
     await getWind(start.lat, start.lng, firstDir);
     
-    // Dessine la route principale en couleur (elle gère sa propre inversion)
     drawWindRoute(latlngsNormal);
- alert("Draw color route");
-    // ✅ CORRECTIF 3 : Transmission des objets de routes officiels aux calculs de scores d'abris
-     const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
-      const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
+    alert("Draw color route");
 
-    
-    // ✅ CORRECTIF 4 : Extraction du temps via le sous-objet .summary officiel du format standard
+    const normalScore = calculateWindScore(latlngsNormal, normalRouteObj);
+    const alternativeScore = calculateWindScore(latlngsAlternative, alternativeRouteObj);
+
     const routesArrayMock = { duration: normalRouteObj.summary.duration };
     const alternativeMock = { duration: alternativeRouteObj.summary.duration };
 
-    const choice = chooseBestRoute(
-        routesArrayMock,
-        alternativeMock,
-        normalScore,
-        alternativeScore
-    );
-
+    const choice = chooseBestRoute(routesArrayMock, alternativeMock, normalScore, alternativeScore);
     const windGain = calculateWindGain(normalScore, alternativeScore);
 
-    let recommendation = choice === "alternative" && allRoutesData.routes.length > 1
-        ? "🌱 CycloWind recommande l'alternative"
-        : "🚴 CycloWind recommande ce trajet";
-
-//==============================================================================================================================
-     // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE ---
+    // ==============================================================================================================================
+    // --- CONFIGURATION DE L'AFFICHAGE DYNAMIQUE (La contradiction est supprimée, la logique est isolée ici) ---
     function updateWindText(currentView, activeScore) {
-        // ✅ CORRIGÉ : Utilisation des nouveaux objets de routes valides
         const routeActive = currentView === "normale" ? normalRouteObj : alternativeRouteObj;
-        
-        // ✅ CORRIGÉ : Accès direct à summary.distance sans passer par .properties
         const distanceKm = (routeActive.summary.distance / 1000).toFixed(1);
-
-        // --- CALCUL DE LA DIFFÉRENCE RÉELLE ---
         const rawGain = ((normalScore - alternativeScore) / normalScore) * 100;
 
         let gainText = "";
@@ -331,21 +296,15 @@ async function getRoute(){
         } 
         else if (Math.abs(rawGain) < 5) { 
             gainText = "🌬️ Exposition au vent équivalente sur les deux trajets";
-            dynamiqueRecommendation = currentView === "alternative" 
-                ? "🚴 Trajet équivalent, mais route initiale plus directe"
-                : "🚴 CycloWind recommande ce trajet initial";
+            dynamiqueRecommendation = currentView === "alternative" ? "🚴 Trajet équivalent, mais route initiale plus directe" : "🚴 CycloWind recommande ce trajet initial";
         } 
         else if (rawGain >= 5) { 
              gainText = `🌱 Économie de vent : -${Math.abs(rawGain).toFixed(0)}% d'effort sur l'alternative`;
-             dynamiqueRecommendation = currentView === "alternative"
-                ? "🌱  Route assez protégée"
-                : "💡 voir l'Alternative abritée";
+             dynamiqueRecommendation = currentView === "alternative" ? "🌱 Route assez protégée" : "💡 Voir l'Alternative abritée";
         } 
         else {
             gainText = `⚠️ Attention : +${Math.abs(rawGain).toFixed(0)}% d'effort vent sur l'alternative`;
-            dynamiqueRecommendation = currentView === "alternative" 
-                ? "⚠️ Route alternative plus exposée"
-                : "🚴 Trajet initial bien plus abrité";
+            dynamiqueRecommendation = currentView === "alternative" ? "⚠️ Route alternative plus exposée" : "🚴 Trajet initial bien plus abrité";
         }
 
         document.getElementById("windInfo").innerHTML = `
@@ -366,11 +325,9 @@ async function getRoute(){
 
     if (latlngsNormal && latlngsNormal.length > 0) {
         const bounds = L.latLngBounds(latlngsNormal);
-        // ✅ CORRECTIF : Utilisation de L.point(50, 50) pour empêcher le système de casser vos crochets
         const paddingLeaflet = L.point(50, 50);
         window.map.fitBounds(bounds, { padding: paddingLeaflet, maxZoom: 15 }); 
     }
-
 
     // --- LOGIQUE DU BOUTON TOGGLE ---
     const toggleBtn = document.getElementById("toggleRouteBtn");
@@ -386,13 +343,13 @@ async function getRoute(){
 
             if (!showingAlternative) {
                 drawWindRoute(window.latlngsAlternativePersist);
-                drawGrayRoute(window.latlngsNormalPersist); // Maintient la principale en gris
+                drawGrayRoute(window.latlngsNormalPersist); 
                 toggleBtn.innerText = "Voir la route normale";
                 updateWindText("alternative", alternativeScore);
                 showingAlternative = true;
             } else {
                 drawWindRoute(window.latlngsNormalPersist);
-                drawGrayRoute(window.latlngsAlternativePersist); // Remet l'alternative en gris
+                drawGrayRoute(window.latlngsAlternativePersist); 
                 toggleBtn.innerText = "Voir la route alternative";
                 updateWindText("normale", normalScore);
                 showingAlternative = false;
@@ -403,7 +360,8 @@ async function getRoute(){
     }
 
     window.drawWindRoute = drawWindRoute;
-}
+} // <- ✅ ICI ! Cette accolade ferme officiellement et proprement la fonction getRoute() au bon endroit !
+
 //==============================================================================================================================================
 // 🔥 VERSION INFAILLIBLE : Plus aucune accolade en fin de fonction pour stopper les crashs !
 function startNavigation() {
