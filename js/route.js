@@ -52,7 +52,7 @@ function extractSegments(feature){
     const forestSegments = new Set();
     const residentialSegments = new Set();
 alert("Pas extras");
-    if(!feature.properties.extras) {
+    if(!feature.properties.extra_info) {
          alert("extras OK");
         return {forestSegments, residentialSegments};
     }
