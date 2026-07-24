@@ -21,6 +21,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
     const url = "https://api.openrouteservice.org/v2/directions/cycling-regular";
   
     const body = {
+        format: "geojson",
         coordinates: [
             [start.lng, start.lat],
             [endLon, endLat]
@@ -30,7 +31,7 @@ async function getAlternativeRoute(start, endLat, endLon) {
             share_factor: 0.4,  
             weight_factor: 1.8  
         },
-        geometry_format: "geojson",
+    
     extra_info: ["waytype", "surface"]   
 };
 
