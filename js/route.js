@@ -254,7 +254,7 @@ async function getRoute(){
         // Trace l'alternative grise en fond
         drawGrayRoute(latlngsAlternative);
     } else {
-        console.log("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
+        alert("L'API n'a pas pu générer de route alternative viable pour ce trajet.");
     }
 
     window.latlngsNormalPersist = latlngsNormal;
