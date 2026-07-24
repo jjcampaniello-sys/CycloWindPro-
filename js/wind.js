@@ -24,7 +24,6 @@ function windDirectionText(
 deg
 ) {
 
-```
 const directions = [
 
     "N",
@@ -59,7 +58,7 @@ const index =
 
 
 return directions[index];
-```
+
 
 }
 
@@ -72,7 +71,7 @@ rideDirection,
 windDirection
 ) {
 
-```
+
 let angle =
     Math.abs(
         Number(rideDirection) -
@@ -109,7 +108,7 @@ if (
 
 
 return "↔️ Vent latéral";
-```
+
 
 }
 
@@ -123,7 +122,7 @@ windDirection,
 windSpeed
 ) {
 
-```
+
 /*
  * Si les données météo ne sont pas disponibles,
  * on retourne un coût neutre.
@@ -201,7 +200,6 @@ function createWindControl(
 rideDirection
 ) {
 
-```
 /*
  * Suppression du contrôle précédent.
  */
@@ -331,7 +329,7 @@ window.windControl.onAdd =
 window.windControl.addTo(
     window.map
 );
-```
+
 
 }
 
@@ -345,7 +343,7 @@ lon,
 rideDirection
 ) {
 
-```
+
 try {
 
     console.log(
@@ -511,7 +509,7 @@ try {
     };
 
 }
-```
+
 
 }
 
